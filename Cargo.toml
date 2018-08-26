@@ -1,0 +1,18 @@
+[package]
+name = "wavr"
+version = "0.1.0"
+authors = ["Richard Mitic <richard.h.mitic@gmail.com>"]
+publish = false
+
+[lib]
+name = "libwavr"
+path = "src/lib.rs"
+
+[[bin]]
+name = "wavr"
+path = "src/main.rs"
+
+[dependencies]
+termion = "1.5.1"
+hound = "3.3.1"
+clap = "2.31.2"
