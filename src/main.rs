@@ -1,4 +1,3 @@
-//extern crate libwavr;
 extern crate clap;
 extern crate termion;
 
@@ -75,6 +74,10 @@ fn main() {
             .short("h")
             .default_value("")
             .help("Height of drawing"))
+        .arg(clap::Arg::with_name("shift")
+            .short("s")
+            .default_value("0.1")
+            .help("Amount to shift left and right"))
         .get_matches();
 
     let size = terminal_size().unwrap();
@@ -84,7 +87,7 @@ fn main() {
     let mut end = matches.value_of("end").unwrap().parse().unwrap();
     let width = matches.value_of("width").unwrap().parse().unwrap_or(size.0) as usize;
     let height = matches.value_of("height").unwrap().parse().unwrap_or(size.1) as usize;
-    let shift_delta = 0.1f32;
+    let shift_delta: f32 = matches.value_of("shift").unwrap().parse().unwrap();
     
     println!("{:?}", filepath);
 

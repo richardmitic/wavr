@@ -4,10 +4,6 @@ version = "0.1.0"
 authors = ["Richard Mitic <richard.h.mitic@gmail.com>"]
 publish = false
 
-[lib]
-name = "libwavr"
-path = "src/lib.rs"
-
 [[bin]]
 name = "wavr"
 path = "src/main.rs"
