@@ -107,11 +107,11 @@ fn main() {
         match key.unwrap() {
             Key::Char('q') => break,
             Key::Left => {
-                shift(&mut beginning, &mut end, &(-shift_delta));
+                shift(&mut beginning, &mut end, &shift_delta);
                 print_wave_raw(&mut c, &width, &height, &mut beginning, &mut end, &mut out);
             },
             Key::Right => {
-                shift(&mut beginning, &mut end, &shift_delta);
+                shift(&mut beginning, &mut end, &(-shift_delta));
                 print_wave_raw(&mut c, &width, &height, &mut beginning, &mut end, &mut out);
             },
             _ => {}
