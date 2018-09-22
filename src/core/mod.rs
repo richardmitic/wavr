@@ -30,9 +30,15 @@ impl Core {
         let skip = (end - start) / (num_peaks as f32);
         (0..num_peaks).map(|x| {
             let phase = start + (x as f32 * skip);
-            let int_phase = (phase * max_points as f32) as usize;
-            println!("{} {} {}", phase, int_phase, skip);
-            self.summary.as_ref().unwrap().summary_1k[int_phase]
+            match phase {
+                p if p < 0f32 => 0f32,
+                p if p >= 1f32 => 0f32,
+                _ => {
+                    let int_phase = (phase * max_points as f32) as usize;
+                    //println!("{} {} {}", phase, int_phase, skip);
+                    self.summary.as_ref().unwrap().summary_1k[int_phase]
+                }
+            }
         }).collect::<Vec<f32>>()
     }
 
@@ -79,5 +85,15 @@ mod tests {
         let p = c.get_peaks(0., 1., 120);
         let w = c.draw_wave(p, &120, &30);
         w.iter().for_each(|row: &Vec<char>| println!("{:?}", row.iter().collect::<String>())); 
+    }
+    
+    #[test]
+    fn out_of_bounds_peaks_are_zero() {
+        let mut c = Core::new();
+        c.load("/Users/richard/Developer/wavr/resources/duskwolf.wav".to_string());
+        let p = c.get_peaks(-1., 0., 5);
+        assert_eq!(p, [0f32, 0f32, 0f32, 0f32, 0f32]);
+        let p = c.get_peaks(1., 2., 5);
+        assert_eq!(p, [0f32, 0f32, 0f32, 0f32, 0f32]);
     }
 }
