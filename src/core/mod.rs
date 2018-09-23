@@ -34,9 +34,14 @@ impl Core {
                 p if p < 0f32 => 0f32,
                 p if p >= 1f32 => 0f32,
                 _ => {
-                    let int_phase = (phase * max_points as f32) as usize;
-                    //println!("{} {} {}", phase, int_phase, skip);
-                    self.summary.as_ref().unwrap().summary_1k[int_phase]
+                    let interp_index = phase * max_points as f32;
+                    let int_index = interp_index as usize;
+                    let coeff = interp_index - interp_index.floor();
+                    let x = self.summary.as_ref().unwrap().summary_1k[int_index];
+                    let y = self.summary.as_ref().unwrap().summary_1k[int_index + 1];
+                    let diff = y - x;
+                    x + (diff * coeff)
+
                 }
             }
         }).collect::<Vec<f32>>()
