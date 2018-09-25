@@ -4,6 +4,7 @@ mod waveform;
 use std::string::String;
 use self::waveform::WaveForm;
 use std;
+use self::hound::WavReader;
 
 pub struct Core {
     file: String,
@@ -69,6 +70,47 @@ impl Core {
 
         arr
     }
+
+    pub fn get_samples(&mut self, start: &f64, end: &f64, num_bins: usize) -> Vec<f32> {
+        let mut reader = WavReader::open(self.file.as_str()).unwrap();
+        let all_samples = reader.samples::<i32>();
+        let start_frame = (all_samples.len() as f64 * *start) as usize;
+        let end_frame = (all_samples.len() as f64 * *end) as usize;
+        let num_frames = end_frame - start_frame;
+        let section: Vec<i32> = all_samples
+            .skip(start_frame)
+            .take(num_frames)
+            .map(|s| s.unwrap())
+            .collect();
+
+        let skip = ((num_frames - 1) as f32) / (num_bins as f32);
+        (0..num_bins).map(|n| {
+            let interp_index = n as f32 * skip;
+            let int_index = interp_index as usize;
+            let x = section[int_index] as f32;
+            let y = section[int_index + 1] as f32;
+            let diff = y - x;
+            x + (diff * interp_index.fract())
+        }).collect::<Vec<f32>>()
+    }
+
+    pub fn draw_samples(&mut self, samples: Vec<f32>, width: &usize, height: &usize) -> Vec<Vec<char>> {
+        let mut arr = vec![vec![' '; *width]; *height];
+        samples.iter().enumerate().for_each(|(i, sample)| {
+            let norm_sample = (sample / (2f32 * std::i16::MAX as f32)) + 0.5;
+            let col = (norm_sample * *height as f32) as usize;
+            println!("{} {} {} {}", i, sample, norm_sample, col);
+            arr[col][i] = 'o';
+        });
+
+        arr
+    }
+
+    pub fn should_draw_samples(&mut self, start: &f64, end: &f64) -> bool {
+        let range = *end - *start;
+        let num_peaks = self.summary.as_ref().unwrap().summary_1k.len() as f64 * range;
+        num_peaks < 4f64
+    }
 }
 
 #[cfg(test)]
@@ -92,6 +134,42 @@ mod tests {
         w.iter().for_each(|row: &Vec<char>| println!("{:?}", row.iter().collect::<String>())); 
     }
     
+    #[test]
+    fn gets_samples() {
+        let mut c = Core::new();
+        c.load("/Users/richard/Developer/wavr/resources/duskwolf.wav".to_string());
+        let s = c.get_samples(&0.3, &0.3015, 30);
+        println!("{:?}", s);
+        assert_eq!(s.len(), 30);
+    }
+    
+    #[test]
+    fn gets_samples_2() {
+        let mut c = Core::new();
+        c.load("/Users/richard/Developer/wavr/resources/duskwolf.wav".to_string());
+        let s = c.get_samples(&0.3, &0.3015, 164);
+        println!("{:?}", s);
+        assert_eq!(s.len(), 164);
+    }
+    
+    #[test]
+    fn draws_samples_big() {
+        let mut c = Core::new();
+        c.load("/Users/richard/Developer/wavr/resources/duskwolf.wav".to_string());
+        let s = c.get_samples(&0.1, &0.9, 120);
+        let w = c.draw_samples(s, &120, &60);
+    }
+
+    #[test]
+    fn draws_samples() {
+        let mut c = Core::new();
+        c.load("/Users/richard/Developer/wavr/resources/duskwolf.wav".to_string());
+        let s = c.get_samples(&0.3, &0.3015, 30);
+        let w = c.draw_samples(s, &120, &30);
+        assert_eq!(w.len(), 30);
+        assert_eq!(w[0].len(), 120);
+    }
+
     #[test]
     fn out_of_bounds_peaks_are_zero() {
         let mut c = Core::new();
