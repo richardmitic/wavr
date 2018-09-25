@@ -23,14 +23,16 @@ struct ViewPoint {
 
 impl ViewPoint {
     fn shift_right(&mut self) -> View {
-        self.begin += self.shift_delta;
-        self.end += self.shift_delta;
+        let range = self.end - self.begin;
+        self.begin += range * self.shift_delta;
+        self.end += range * self.shift_delta;
         (self.begin, self.end)
     }
     
     fn shift_left(&mut self) -> View {
-        self.begin -= self.shift_delta;
-        self.end -= self.shift_delta;
+        let range = self.end - self.begin;
+        self.begin -= range * self.shift_delta;
+        self.end -= range * self.shift_delta;
         (self.begin, self.end)
     }
 
