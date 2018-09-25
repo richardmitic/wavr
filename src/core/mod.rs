@@ -27,7 +27,7 @@ impl Core {
     /// Returns a set of wave peaks resampled to the given length
     /// start and end are in the range 0. to 1.
     pub fn get_peaks(&mut self, start: f32, end: f32, num_peaks: u32) -> Vec<f32> {
-        let max_points = self.summary.as_ref().unwrap().summary_1k.len() - 1;
+        let max_points = self.summary.as_ref().unwrap().summary_64.len() - 1;
         let skip = (end - start) / (num_peaks as f32);
         (0..num_peaks).map(|x| {
             let phase = start + (x as f32 * skip);
@@ -38,8 +38,8 @@ impl Core {
                     let interp_index = phase * max_points as f32;
                     let int_index = interp_index as usize;
                     let coeff = interp_index - interp_index.floor();
-                    let x = self.summary.as_ref().unwrap().summary_1k[int_index];
-                    let y = self.summary.as_ref().unwrap().summary_1k[int_index + 1];
+                    let x = self.summary.as_ref().unwrap().summary_64[int_index];
+                    let y = self.summary.as_ref().unwrap().summary_64[int_index + 1];
                     let diff = y - x;
                     x + (diff * coeff)
 
@@ -106,10 +106,10 @@ impl Core {
         arr
     }
 
-    pub fn should_draw_samples(&mut self, start: &f64, end: &f64) -> bool {
+    pub fn should_draw_samples(&mut self, start: &f64, end: &f64, width: &usize) -> bool {
         let range = *end - *start;
-        let num_peaks = self.summary.as_ref().unwrap().summary_1k.len() as f64 * range;
-        num_peaks < 4f64
+        let num_peaks = self.summary.as_ref().unwrap().summary_64.len() as f64 * range;
+        num_peaks < (width / 2) as f64
     }
 }
 

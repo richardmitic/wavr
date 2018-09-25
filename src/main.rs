@@ -57,7 +57,7 @@ impl ViewPoint {
 
 
 fn print_wave_raw(core: &mut Core, width: &usize, height: &usize, view: View, screen: &mut Write) {
-    if core.should_draw_samples(&(view.0 as f64), &(view.1 as f64)) {
+    if core.should_draw_samples(&(view.0 as f64), &(view.1 as f64), width) {
         let samples = core.get_samples(&(view.0 as f64), &(view.1 as f64), *width as usize);
         let wave = core.draw_samples(samples, &width, &height);
         print_pixels_raw(wave, screen);

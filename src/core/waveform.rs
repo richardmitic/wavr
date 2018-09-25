@@ -5,6 +5,7 @@ use self::hound::{ WavReader };
 use std::vec::Vec;
 
 pub struct WaveForm {
+    pub summary_64: Vec<f32>,
     pub summary_1k: Vec<f32>,
     pub summary_8k: Vec<f32>,
     pub summary_64k: Vec<f32>,
@@ -21,6 +22,7 @@ fn rms(signal: &[i32]) -> f32 {
 impl WaveForm {
     pub fn from_samples(samples: &Vec<i32>, channels: u16) -> WaveForm {
         WaveForm {
+            summary_64: samples.chunks(64).map(|chunk| rms(chunk)).collect(),
             summary_1k: samples.chunks(1024).map(|chunk| rms(chunk)).collect(),
             summary_8k: samples.chunks(8196).map(|chunk| rms(chunk)).collect(),
             summary_64k: samples.chunks(65536).map(|chunk| rms(chunk)).collect(),
