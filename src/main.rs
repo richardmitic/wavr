@@ -50,6 +50,12 @@ impl ViewPoint {
         (self.begin, self.end)
     }
 
+    fn reset(&mut self) -> View {
+        self.begin = 0.;
+        self.end = 1.;
+        (self.begin, self.end)
+    }
+
     fn get_view(&mut self) -> View {
         (self.begin, self.end)
     }
@@ -165,6 +171,10 @@ fn main() {
     for key in stdin.keys() {
         match key.unwrap() {
             Key::Char('q') => break,
+            Key::Char('r') => {
+                let view = view_point.reset();
+                print_wave_raw(&mut c, &width, &height, view, &mut out);
+            },
             Key::Left => {
                 let view = view_point.shift_left();
                 print_wave_raw(&mut c, &width, &height, view, &mut out);
