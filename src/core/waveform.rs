@@ -9,18 +9,21 @@ pub struct WaveForm {
     pub summary_1k: Vec<f32>,
     pub summary_8k: Vec<f32>,
     pub summary_64k: Vec<f32>,
-    pub min: i32,
-    pub max: i32,
+    pub min: i16,
+    pub max: i16,
     pub channels: u16
 }
 
-fn rms(signal: &[i32]) -> f32 {
+fn rms(signal: &[i16]) -> f32 {
     let len = signal.len() as f32;
-    (signal.iter().map(|x| (x * x) as f32).sum::<f32>() / len).sqrt()
+    (signal.iter().map(|x| {
+        let f = *x as f32;
+        f * f
+    }).sum::<f32>() / len).sqrt()
 }
 
 impl WaveForm {
-    pub fn from_samples(samples: &Vec<i32>, channels: u16) -> WaveForm {
+    pub fn from_samples(samples: &Vec<i16>, channels: u16) -> WaveForm {
         WaveForm {
             summary_64: samples.chunks(64).map(|chunk| rms(chunk)).collect(),
             summary_1k: samples.chunks(1024).map(|chunk| rms(chunk)).collect(),
@@ -34,7 +37,7 @@ impl WaveForm {
 
     pub fn from_file(path: &str) -> WaveForm {
         let mut reader = WavReader::open(path).unwrap();
-        let samples: Vec<i32> = reader.samples::<i32>().map(|s| s.unwrap()).collect();
+        let samples: Vec<i16> = reader.samples::<i16>().map(|s| s.unwrap()).collect();
         let channels = reader.spec().channels;
         WaveForm::from_samples(&samples, channels)
     }
@@ -47,7 +50,7 @@ mod tests {
 
     #[test]
     fn creates_summary_from_samples() {
-        let samples : Vec<i32> = vec!(0, 1, 2);
+        let samples : Vec<i16> = vec!(0, 1, 2);
         let w = WaveForm::from_samples(&samples, 1);
         assert_eq!(w.summary_1k, [1.6666666f32]);
         assert_eq!(w.summary_8k, [1.6666666f32]);

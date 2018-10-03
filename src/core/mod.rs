@@ -53,8 +53,8 @@ impl Core {
         peaks.iter().enumerate().for_each(|(i, peak)| {
             let centre_row = *height / 2;
             let spread = (*height * *peak as usize) / (std::i16::MAX as usize);
-            let top_row = centre_row - spread + 1;
-            let bottom_row = centre_row + spread;
+            let top_row = (centre_row - spread.min(centre_row)) + 1;
+            let bottom_row = (centre_row + spread).min(*height - 1);
 
             match spread {
                 0 => {
@@ -73,24 +73,41 @@ impl Core {
 
     pub fn get_samples(&mut self, start: &f64, end: &f64, num_bins: usize) -> Vec<f32> {
         let mut reader = WavReader::open(self.file.as_str()).unwrap();
+
+        let clipped_start = (*start).min(1.).max(0.);
+        let clipped_end = (*end).min(1.).max(0.);
         let all_samples = reader.samples::<i32>();
-        let start_frame = (all_samples.len() as f64 * *start) as usize;
-        let end_frame = (all_samples.len() as f64 * *end) as usize;
+        let full_len = all_samples.len() as f64;
+        let start_frame = ((full_len - 1.) * clipped_start) as usize;
+        let end_frame = ((full_len - 1.) * clipped_end) as usize;
         let num_frames = end_frame - start_frame;
+        
+
+        if num_frames == 0 {
+            return vec![0f32; num_bins]
+        }
+
+        let skip = ((*end - *start) * full_len) / num_bins as f64;
+        let interp_start = *start * full_len;
+        println!("{} {} {} {} {} {} {} {}", clipped_start, clipped_end, all_samples.len(), start_frame, end_frame, num_frames, skip, interp_start);
         let section: Vec<i32> = all_samples
             .skip(start_frame)
             .take(num_frames)
             .map(|s| s.unwrap())
             .collect();
 
-        let skip = ((num_frames - 1) as f32) / (num_bins as f32);
         (0..num_bins).map(|n| {
-            let interp_index = n as f32 * skip;
-            let int_index = interp_index as usize;
-            let x = section[int_index] as f32;
-            let y = section[int_index + 1] as f32;
-            let diff = y - x;
-            x + (diff * interp_index.fract())
+            let interp_index = (interp_start + (skip * n as f64)) - start_frame as f64;
+            println!("{} {}", n, interp_index);
+            match interp_index {
+                ii if ii < 0f64 => 0f32,
+                ii if ii >= num_frames as f64 => 0f32,
+                _ => {
+                    let int_index = interp_index as usize;
+                    section[int_index] as f32
+                }
+            }
+
         }).collect::<Vec<f32>>()
     }
 
@@ -99,7 +116,7 @@ impl Core {
         samples.iter().enumerate().for_each(|(i, sample)| {
             let norm_sample = (sample / (2f32 * std::i16::MAX as f32)) + 0.5;
             let col = (norm_sample * *height as f32) as usize;
-            println!("{} {} {} {}", i, sample, norm_sample, col);
+            println!("draw_samples {} {} {} {}", i, sample, norm_sample, col);
             arr[col][i] = 'o';
         });
 
@@ -178,5 +195,26 @@ mod tests {
         assert_eq!(p, [0f32, 0f32, 0f32, 0f32, 0f32]);
         let p = c.get_peaks(1., 2., 5);
         assert_eq!(p, [0f32, 0f32, 0f32, 0f32, 0f32]);
+    }
+
+    #[test]
+    fn panic1() {
+        let mut c = Core::new();
+        c.load("/Users/richard/Developer/wavr/resources/duskwolf.wav".to_string());
+        let p = c.get_peaks(0.074016, 0.401696, 181);
+        let w = c.draw_wave(p, &181, &30);
+        assert_eq!(w.len(), 30);
+    }
+
+    #[test]
+    fn out_of_bounds_samples_are_zero() {
+        let mut c = Core::new();
+        c.load("/Users/richard/Developer/wavr/resources/duskwolf.wav".to_string());
+        let p = c.get_samples(&-1., &0., 5);
+        assert_eq!(p, [0f32, 0f32, 0f32, 0f32, 0f32]);
+        let p = c.get_samples(&1., &2., 5);
+        assert_eq!(p, [0f32, 0f32, 0f32, 0f32, 0f32]);
+        let p = c.get_samples(&0.5, &1.5, 5);
+        assert_eq!(p, [-161.0f32, -1867.0f32, 19.0f32, 0f32, 0f32]);
     }
 }
