@@ -89,7 +89,7 @@ impl Core {
 
         let skip = ((*end - *start) * full_len) / num_bins as f64;
         let interp_start = *start * full_len;
-        println!("{} {} {} {} {} {} {} {}", clipped_start, clipped_end, all_samples.len(), start_frame, end_frame, num_frames, skip, interp_start);
+        //println!("{} {} {} {} {} {} {} {}", clipped_start, clipped_end, all_samples.len(), start_frame, end_frame, num_frames, skip, interp_start);
         let section: Vec<i32> = all_samples
             .skip(start_frame)
             .take(num_frames)
@@ -98,7 +98,7 @@ impl Core {
 
         (0..num_bins).map(|n| {
             let interp_index = (interp_start + (skip * n as f64)) - start_frame as f64;
-            println!("{} {}", n, interp_index);
+            //println!("{} {}", n, interp_index);
             match interp_index {
                 ii if ii < 0f64 => 0f32,
                 ii if ii >= num_frames as f64 => 0f32,
@@ -116,7 +116,7 @@ impl Core {
         samples.iter().enumerate().for_each(|(i, sample)| {
             let norm_sample = (sample / (2f32 * std::i16::MAX as f32)) + 0.5;
             let col = (norm_sample * *height as f32) as usize;
-            println!("draw_samples {} {} {} {}", i, sample, norm_sample, col);
+            //println!("draw_samples {} {} {} {}", i, sample, norm_sample, col);
             arr[col][i] = 'o';
         });
 
