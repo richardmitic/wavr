@@ -68,8 +68,8 @@ fn print_wave_raw(core: &mut Core, width: &usize, height: &usize, view: View, sc
         let wave = core.draw_samples(samples, &width, &height);
         print_pixels_raw(wave, screen);
     } else {
-        let peaks = core.get_peaks(view.0 as f32, view.1 as f32, *width as u32);
-        let wave = core.draw_wave(peaks, &width, &height);
+        let peaks = core.get_peaks_extra(&(view.0 as f64), &(view.1 as f64), *width as u32);
+        let wave = core.draw_wave_extra(peaks, &width, &height);
         print_pixels_raw(wave, screen);
     }
 }

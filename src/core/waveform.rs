@@ -1,10 +1,65 @@
 extern crate hound;
 extern crate itertools;
 
+use std::ops::{ Add, Mul, Sub };
 use self::hound::{ WavReader };
 use std::vec::Vec;
 
+#[derive(Debug, Clone, Copy)]
+pub struct WaveSection {
+    pub min: f32,
+    pub max: f32,
+    pub rms: f32
+}
+
+impl WaveSection {
+    pub fn from_signal(signal: &[i16]) -> WaveSection {
+        WaveSection {
+            min: *signal.iter().max().unwrap() as f32,
+            max: *signal.iter().min().unwrap() as f32,
+            rms: rms(signal)
+        }
+    }
+}
+
+impl Sub for WaveSection {
+    type Output = WaveSection;
+
+    fn sub(self, other: WaveSection) -> WaveSection {
+        WaveSection {
+            min: self.min - other.min,
+            max: self.max - other.max,
+            rms: self.rms - other.rms
+        }
+    }
+}
+
+impl Add for WaveSection {
+    type Output = WaveSection;
+
+    fn add(self, other: WaveSection) -> WaveSection {
+        WaveSection {
+            min: self.min + other.min,
+            max: self.max + other.max,
+            rms: self.rms + other.rms
+        }
+    }
+}
+
+impl Mul<f32> for WaveSection {
+    type Output = WaveSection;
+
+    fn mul(self, rhs: f32) -> WaveSection {
+        WaveSection {
+            min: self.min * rhs,
+            max: self.max * rhs,
+            rms: self.rms * rhs
+        }
+    }
+}
+
 pub struct WaveForm {
+    pub summary_64_extra: Vec<WaveSection>,
     pub summary_64: Vec<f32>,
     pub summary_1k: Vec<f32>,
     pub summary_8k: Vec<f32>,
@@ -25,6 +80,7 @@ fn rms(signal: &[i16]) -> f32 {
 impl WaveForm {
     pub fn from_samples(samples: &Vec<i16>, channels: u16) -> WaveForm {
         WaveForm {
+            summary_64_extra: samples.chunks(64).map(|chunk| WaveSection::from_signal(chunk)).collect(),
             summary_64: samples.chunks(64).map(|chunk| rms(chunk)).collect(),
             summary_1k: samples.chunks(1024).map(|chunk| rms(chunk)).collect(),
             summary_8k: samples.chunks(8196).map(|chunk| rms(chunk)).collect(),

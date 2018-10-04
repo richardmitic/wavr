@@ -2,7 +2,7 @@ extern crate hound;
 mod waveform;
 
 use std::string::String;
-use self::waveform::WaveForm;
+use self::waveform::{ WaveForm, WaveSection };
 use std;
 use self::hound::WavReader;
 
@@ -22,6 +22,51 @@ impl Core {
     pub fn load(&mut self, f: String) {
         self.file = f;
         self.summary = Some(WaveForm::from_file(&self.file)); 
+    }
+
+
+    pub fn get_peaks_extra(&mut self, start: &f64, end: &f64, num_peaks: u32) -> Vec<Option<WaveSection>> {
+        let max_points = self.summary.as_ref().unwrap().summary_64_extra.len() - 1;
+        let skip = (*end - *start) / (num_peaks as f64);
+        
+        (0..num_peaks).map(|x| {
+            let phase = *start + (x as f64 * skip);
+            match phase {
+                p if p < 0f64 => None,
+                p if p >= 1f64 => None,
+                _ => {
+                    let interp_index = phase * max_points as f64;
+                    let int_index = interp_index as usize;
+                    let coeff = interp_index - interp_index.floor();
+                    let x = self.summary.as_ref().unwrap().summary_64_extra[int_index].clone();
+                    let y = self.summary.as_ref().unwrap().summary_64_extra[int_index + 1].clone();
+                    let diff = y - x;
+                    Some(x + (diff * coeff as f32))
+                }
+            }
+        }).collect::<Vec<Option<WaveSection>>>()
+    }
+
+    pub fn draw_wave_extra(&mut self, peaks: Vec<Option<WaveSection>>, width: &usize, height: &usize) -> Vec<Vec<char>> {
+        let mut arr = vec![vec![' '; *width]; *height];
+        peaks.iter().enumerate().for_each(|(i, sect)| {
+            let centre_row = *height / 2;
+            match *sect {
+                Some(ws) => {
+                    let centre_row = *height / 2;
+                    let spread = (*height * ws.rms as usize) / (std::i16::MAX as usize);
+                    let top_row = (centre_row - spread.min(centre_row)) + 1;
+                    let bottom_row = (centre_row + spread).min(*height - 1);
+                    match spread {
+                        0 => arr[centre_row][i] = '=',
+                        _ => for j in top_row..bottom_row { arr[j][i] = 'o'; }
+                    }
+                },
+                None => arr[centre_row][i] = '-'
+            }
+        });
+
+        arr
     }
 
     /// Returns a set of wave peaks resampled to the given length
