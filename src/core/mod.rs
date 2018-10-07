@@ -6,6 +6,10 @@ use self::waveform::{ WaveForm, WaveSection };
 use std;
 use self::hound::WavReader;
 
+fn scale(x: f64, in_min: f64, in_max: f64, out_min: f64, out_max: f64) -> f64 {
+    (((out_max - out_min) * (x - in_min)) / (in_max - in_min)) + out_min
+}
+
 pub struct Core {
     file: String,
     summary: Option<WaveForm>,
@@ -50,16 +54,33 @@ impl Core {
     pub fn draw_wave_extra(&mut self, peaks: Vec<Option<WaveSection>>, width: &usize, height: &usize) -> Vec<Vec<char>> {
         let mut arr = vec![vec![' '; *width]; *height];
         peaks.iter().enumerate().for_each(|(i, sect)| {
-            let centre_row = *height / 2;
+            let centre_row = (*height / 2) - 1;
+            let mid_point = (*height as f64) / 2.;
             match *sect {
                 Some(ws) => {
-                    let centre_row = *height / 2;
-                    let spread = (*height * ws.rms as usize) / (std::i16::MAX as usize);
-                    let top_row = (centre_row - spread.min(centre_row)) + 1;
-                    let bottom_row = (centre_row + spread).min(*height - 1);
-                    match spread {
-                        0 => arr[centre_row][i] = '=',
-                        _ => for j in top_row..bottom_row { arr[j][i] = 'o'; }
+                    let full_scale_max = (std::i16::MAX / 2) as f64;
+                    let full_scale_min = (std::i16::MIN / 2) as f64;
+                    let this_scale_max = (*height - 1) as f64;
+                    let max_scaled = scale(ws.max as f64, full_scale_min, full_scale_max, this_scale_max, 0.).max(0f64);
+                    let min_scaled = scale(ws.min as f64, full_scale_min, full_scale_max, this_scale_max, 0.).min(this_scale_max);
+                    let max_rms_scaled = scale(ws.rms as f64, full_scale_min, full_scale_max, this_scale_max, 0.).max(0f64);
+                    let min_rms_scaled = scale(-(ws.rms as f64), full_scale_min, full_scale_max, this_scale_max, 0.).min(this_scale_max);
+                    //println!("{} {} {}", max_scaled, min_scaled, mid_point);
+                    let max_idx = max_scaled as usize;
+                    let min_idx = min_scaled as usize;
+                    let max_rms_idx = max_rms_scaled as usize;
+                    let min_rms_idx = min_rms_scaled as usize;
+                    match (max_scaled - mid_point).abs() < 1. && (min_scaled - mid_point).abs() < 1. {
+                        true => arr[centre_row][i] = '=',
+                        false => {
+                            for j in max_idx..min_idx { 
+                                arr[j][i] = '.'; 
+                            }
+                            
+                            for j in max_rms_idx..min_rms_idx { 
+                                arr[j][i] = 'o'; 
+                            }
+                        }
                     }
                 },
                 None => arr[centre_row][i] = '-'
@@ -261,5 +282,29 @@ mod tests {
         assert_eq!(p, [0f32, 0f32, 0f32, 0f32, 0f32]);
         let p = c.get_samples(&0.5, &1.5, 5);
         assert_eq!(p, [-161.0f32, -1867.0f32, 19.0f32, 0f32, 0f32]);
+    }
+
+    fn assert_close_enough(x: f64, y: f64, epsilon: f64) {
+        assert_eq!((x - y).abs() < epsilon, true);
+    }
+
+    #[test]
+    fn scale_up() {
+        assert_close_enough(scale(0.1, -1., 1., -2., 2.), 0.2, 0.00000001);
+    }
+
+    #[test]
+    fn scale_invert() {
+        assert_close_enough(scale(0.1, -1., 1., 2., -2.), -0.2, 0.00000001);
+    }
+
+    #[test]
+    fn scale_shift() {
+        assert_close_enough(scale(0.1, -1., 1., 0., 2.), 1.1, 0.00000001);
+    }
+
+    #[test]
+    fn scale_shift_invert() {
+        assert_close_enough(scale(0.1, -1., 1., 2., 0.), 0.9, 0.00000001);
     }
 }

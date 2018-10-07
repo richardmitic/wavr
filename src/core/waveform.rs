@@ -15,8 +15,8 @@ pub struct WaveSection {
 impl WaveSection {
     pub fn from_signal(signal: &[i16]) -> WaveSection {
         WaveSection {
-            min: *signal.iter().max().unwrap() as f32,
-            max: *signal.iter().min().unwrap() as f32,
+            min: *signal.iter().min().unwrap() as f32,
+            max: *signal.iter().max().unwrap() as f32,
             rms: rms(signal)
         }
     }
