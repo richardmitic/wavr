@@ -60,7 +60,7 @@ impl Core {
                 Some(ws) => {
                     let full_scale_max = (std::i16::MAX / 2) as f64;
                     let full_scale_min = (std::i16::MIN / 2) as f64;
-                    let this_scale_max = (*height - 1) as f64;
+                    let this_scale_max = *height as f64 - 0.01;
                     let max_scaled = scale(ws.max as f64, full_scale_min, full_scale_max, this_scale_max, 0.).max(0f64);
                     let min_scaled = scale(ws.min as f64, full_scale_min, full_scale_max, this_scale_max, 0.).min(this_scale_max);
                     let max_rms_scaled = scale(ws.rms as f64, full_scale_min, full_scale_max, this_scale_max, 0.).max(0f64);
@@ -70,11 +70,11 @@ impl Core {
                     let min_idx = min_scaled as usize;
                     let max_rms_idx = max_rms_scaled as usize;
                     let min_rms_idx = min_rms_scaled as usize;
-                    match (max_scaled - mid_point).abs() < 1. && (min_scaled - mid_point).abs() < 1. {
-                        true => arr[centre_row][i] = '=',
+                    match min_idx == max_idx {
+                        true => arr[max_idx][i] = '=',
                         false => {
                             for j in max_idx..min_idx { 
-                                arr[j][i] = '.'; 
+                                arr[j][i] = '·'; 
                             }
                             
                             for j in max_rms_idx..min_rms_idx { 
