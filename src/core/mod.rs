@@ -145,10 +145,12 @@ impl Core {
 
     pub fn draw_samples(&mut self, samples: Vec<f32>, width: &usize, height: &usize) -> Vec<Vec<char>> {
         let mut arr = vec![vec![' '; *width]; *height];
+        let full_scale_max = (std::i16::MAX) as f64;
+        let full_scale_min = (std::i16::MIN) as f64;
+        let this_scale_max = (*height - 1) as f64;
         samples.iter().enumerate().for_each(|(i, sample)| {
-            let norm_sample = (sample / (2f32 * std::i16::MAX as f32)) + 0.5;
-            let col = (norm_sample * *height as f32) as usize;
             //println!("draw_samples {} {} {} {}", i, sample, norm_sample, col);
+            let col = scale(*sample as f64, full_scale_max, full_scale_min, this_scale_max, 0.) as usize;
             arr[col][i] = 'o';
         });
 
@@ -224,7 +226,7 @@ mod tests {
         let mut c = Core::new();
         c.load("/Users/richard/Developer/wavr/resources/duskwolf.wav".to_string());
         let p = c.get_peaks(&-1., &0., 5);
-        assert_eq!(p, [0f32, 0f32, 0f32, 0f32, 0f32]);
+        assert_eq!(p, [None, None, None, None, None]);
         let p = c.get_peaks(&1., &2., 5);
         assert_eq!(p, [0f32, 0f32, 0f32, 0f32, 0f32]);
     }
