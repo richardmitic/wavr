@@ -149,8 +149,7 @@ impl Core {
         let full_scale_min = (std::i16::MIN) as f64;
         let this_scale_max = (*height - 1) as f64;
         samples.iter().enumerate().for_each(|(i, sample)| {
-            //println!("draw_samples {} {} {} {}", i, sample, norm_sample, col);
-            let col = scale(*sample as f64, full_scale_max, full_scale_min, this_scale_max, 0.) as usize;
+            let col = scale(*sample as f64, full_scale_min, full_scale_max, this_scale_max, 0.) as usize;
             arr[col][i] = 'o';
         });
 
