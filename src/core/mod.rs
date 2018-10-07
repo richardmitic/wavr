@@ -1,18 +1,26 @@
 extern crate hound;
 mod waveform;
 
+use std;
 use std::string::String;
 use self::waveform::{ WaveForm, WaveSection };
-use std;
 use self::hound::WavReader;
 
 fn scale(x: f64, in_min: f64, in_max: f64, out_min: f64, out_max: f64) -> f64 {
     (((out_max - out_min) * (x - in_min)) / (in_max - in_min)) + out_min
 }
 
+pub struct DisplayChars {
+    rms: char,
+    peak: char,
+    zero: char,
+    none: char
+}
+
 pub struct Core {
     file: String,
     summary: Option<WaveForm>,
+    chars: DisplayChars
 }
 
 impl Core {
@@ -20,19 +28,25 @@ impl Core {
         Core {
             file: String::new(),
             summary: Option::None,
+            chars: DisplayChars {
+                rms: 'o',
+                peak: '·',
+                zero: '=',
+                none: '-'
+            }
         }
     }
 
     pub fn load(&mut self, f: String) {
         self.file = f;
-        self.summary = Some(WaveForm::from_file(&self.file)); 
+        self.summary = Some(WaveForm::from_file(&self.file));
     }
 
 
     pub fn get_peaks_extra(&mut self, start: &f64, end: &f64, num_peaks: u32) -> Vec<Option<WaveSection>> {
         let max_points = self.summary.as_ref().unwrap().summary_64_extra.len() - 1;
         let skip = (*end - *start) / (num_peaks as f64);
-        
+
         (0..num_peaks).map(|x| {
             let phase = *start + (x as f64 * skip);
             match phase {
@@ -71,19 +85,19 @@ impl Core {
                     let max_rms_idx = max_rms_scaled as usize;
                     let min_rms_idx = min_rms_scaled as usize;
                     match min_idx == max_idx {
-                        true => arr[max_idx][i] = '=',
+                        true => arr[max_idx][i] = self.chars.zero,
                         false => {
-                            for j in max_idx..min_idx { 
-                                arr[j][i] = '·'; 
+                            for j in max_idx..min_idx {
+                                arr[j][i] = self.chars.peak;
                             }
-                            
-                            for j in max_rms_idx..min_rms_idx { 
-                                arr[j][i] = 'o'; 
+
+                            for j in max_rms_idx..min_rms_idx {
+                                arr[j][i] = self.chars.rms;
                             }
                         }
                     }
                 },
-                None => arr[centre_row][i] = '-'
+                None => arr[centre_row][i] = self.chars.none
             }
         });
 
@@ -147,7 +161,7 @@ impl Core {
         let start_frame = ((full_len - 1.) * clipped_start) as usize;
         let end_frame = ((full_len - 1.) * clipped_end) as usize;
         let num_frames = end_frame - start_frame;
-        
+
 
         if num_frames == 0 {
             return vec![0f32; num_bins]
@@ -207,16 +221,16 @@ mod tests {
         let p = c.get_peaks(0., 1., 20);
         assert_eq!(p, [0f32, 1f32, 2f32, 3f32, 4f32, 5f32, 6f32, 7f32, 8f32, 9f32]);
     }
-    
+
     #[test]
     fn draws_wave() {
         let mut c = Core::new();
         c.load("/Users/richard/Developer/wavr/resources/duskwolf.wav".to_string());
         let p = c.get_peaks(0., 1., 120);
         let w = c.draw_wave(p, &120, &30);
-        w.iter().for_each(|row: &Vec<char>| println!("{:?}", row.iter().collect::<String>())); 
+        w.iter().for_each(|row: &Vec<char>| println!("{:?}", row.iter().collect::<String>()));
     }
-    
+
     #[test]
     fn gets_samples() {
         let mut c = Core::new();
@@ -225,7 +239,7 @@ mod tests {
         println!("{:?}", s);
         assert_eq!(s.len(), 30);
     }
-    
+
     #[test]
     fn gets_samples_2() {
         let mut c = Core::new();
@@ -234,7 +248,7 @@ mod tests {
         println!("{:?}", s);
         assert_eq!(s.len(), 164);
     }
-    
+
     #[test]
     fn draws_samples_big() {
         let mut c = Core::new();
