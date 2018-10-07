@@ -68,17 +68,16 @@ impl Core {
     pub fn draw_wave_extra(&mut self, peaks: Vec<Option<WaveSection>>, width: &usize, height: &usize) -> Vec<Vec<char>> {
         let mut arr = vec![vec![' '; *width]; *height];
         peaks.iter().enumerate().for_each(|(i, sect)| {
-            let centre_row = (*height / 2) - 1;
-            let mid_point = (*height as f64) / 2.;
+            let full_scale_max = (std::i16::MAX) as f64;
+            let full_scale_min = (std::i16::MIN) as f64;
+            let this_scale_max = (*height - 1) as f64;
+            let centre_row = scale(0., full_scale_min, full_scale_max, this_scale_max, 0.) as usize;
             match *sect {
                 Some(ws) => {
-                    let full_scale_max = (std::i16::MAX / 2) as f64;
-                    let full_scale_min = (std::i16::MIN / 2) as f64;
-                    let this_scale_max = *height as f64 - 0.01;
-                    let max_scaled = scale(ws.max as f64, full_scale_min, full_scale_max, this_scale_max, 0.).max(0f64);
-                    let min_scaled = scale(ws.min as f64, full_scale_min, full_scale_max, this_scale_max, 0.).min(this_scale_max);
-                    let max_rms_scaled = scale(ws.rms as f64, full_scale_min, full_scale_max, this_scale_max, 0.).max(0f64);
-                    let min_rms_scaled = scale(-(ws.rms as f64), full_scale_min, full_scale_max, this_scale_max, 0.).min(this_scale_max);
+                    let max_scaled = scale(ws.max as f64, full_scale_min, full_scale_max, this_scale_max, 0.).max(0f64) + 0.5;
+                    let min_scaled = scale(ws.min as f64, full_scale_min, full_scale_max, this_scale_max, 0.).min(this_scale_max) + 0.5;
+                    let max_rms_scaled = scale(ws.rms as f64, full_scale_min, full_scale_max, this_scale_max, 0.).max(0f64) + 0.5;
+                    let min_rms_scaled = scale(-(ws.rms as f64), full_scale_min, full_scale_max, this_scale_max, 0.).min(this_scale_max) + 0.5;
                     //println!("{} {} {}", max_scaled, min_scaled, mid_point);
                     let max_idx = max_scaled as usize;
                     let min_idx = min_scaled as usize;
