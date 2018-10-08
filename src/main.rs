@@ -88,7 +88,7 @@ fn print_pixels_raw(wave: Vec<Vec<char>>, screen: &mut Write) {
             write!(screen, "{}", pixel).unwrap();
         }
     });
-    write!(screen, "{}", termion::cursor::Goto(1,1)).unwrap();
+    //write!(screen, "{}", termion::cursor::Goto(1,1)).unwrap();
     screen.flush().unwrap();
 }
 
@@ -140,6 +140,10 @@ fn main() {
             .short("z")
             .default_value("0.1")
             .help("Amount to zoom in and out per key press"))
+        .arg(clap::Arg::with_name("print")
+            .short("p")
+            .takes_value(false)
+            .help("Print single view and exit"))
         .get_matches();
 
     let size = terminal_size().unwrap();
@@ -147,6 +151,7 @@ fn main() {
     let filepath = matches.value_of("INPUT");
     let width = matches.value_of("width").unwrap().parse().unwrap_or(size.0) as usize;
     let height = matches.value_of("height").unwrap().parse().unwrap_or(size.1) as usize;
+    let just_print = matches.occurrences_of("print") > 0;
     
     let mut view_point = ViewPoint {
         begin: matches.value_of("begin").unwrap().parse().unwrap(),
@@ -160,12 +165,18 @@ fn main() {
     let mut c = Core::new();
     c.load(filepath.unwrap().to_string());
 
+    let view = view_point.get_view();
+
+    if just_print {
+        print_wave_raw(&mut c, &width, &height, view, &mut stdout());
+        return
+    }
+
     let stdin = stdin();
     let mut out = stdout().into_raw_mode().unwrap();
 
     setup_screen(&mut out);
 
-    let view = view_point.get_view();
     print_wave_raw(&mut c, &width, &height, view, &mut out);
 
     for key in stdin.keys() {
