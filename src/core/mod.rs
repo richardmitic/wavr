@@ -107,15 +107,14 @@ impl Core {
 
     pub fn get_samples(&mut self, start: &f64, end: &f64, num_bins: usize) -> Vec<f32> {
         let mut reader = WavReader::open(self.file.as_str()).unwrap();
+        let _spec = reader.spec();
 
         let clipped_start = (*start).min(1.).max(0.);
         let clipped_end = (*end).min(1.).max(0.);
-        let all_samples = reader.samples::<i32>();
-        let full_len = all_samples.len() as f64;
+        let full_len = reader.len() as f64;
         let start_frame = ((full_len - 1.) * clipped_start) as usize;
         let end_frame = ((full_len - 1.) * clipped_end) as usize;
         let num_frames = end_frame - start_frame;
-
 
         if num_frames == 0 {
             return vec![0f32; num_bins]
@@ -123,9 +122,8 @@ impl Core {
 
         let skip = ((*end - *start) * full_len) / num_bins as f64;
         let interp_start = *start * full_len;
-        //println!("{} {} {} {} {} {} {} {}", clipped_start, clipped_end, all_samples.len(), start_frame, end_frame, num_frames, skip, interp_start);
-        let section: Vec<i32> = all_samples
-            .skip(start_frame)
+        let _pos = reader.seek(start_frame as u32);
+        let section: Vec<i32> = reader.samples::<i32>()
             .take(num_frames)
             .map(|s| s.unwrap())
             .collect();
