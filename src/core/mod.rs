@@ -14,7 +14,8 @@ pub struct DisplayChars {
     rms: char,
     peak: char,
     zero: char,
-    none: char
+    none: char,
+    sample: char
 }
 
 pub struct Core {
@@ -32,7 +33,8 @@ impl Core {
                 rms: 'o',
                 peak: '·',
                 zero: '=',
-                none: '-'
+                none: '-',
+                sample: '•'
             }
         }
     }
@@ -150,7 +152,7 @@ impl Core {
         let this_scale_max = (*height - 1) as f64;
         samples.iter().enumerate().for_each(|(i, sample)| {
             let col = scale(*sample as f64, full_scale_min, full_scale_max, this_scale_max, 0.) as usize;
-            arr[col][i] = 'o';
+            arr[col][i] = self.chars.sample;
         });
 
         arr
