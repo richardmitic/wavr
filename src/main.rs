@@ -99,7 +99,7 @@ fn setup_screen(screen: &mut Write) {
 }
 
 fn reset_screen(screen: &mut Write) {
-    write!(screen, "{}{}", termion::clear::All, termion::cursor::Show).unwrap();
+    write!(screen, "{}{}{}", termion::clear::All, termion::cursor::Show, termion::cursor::Goto(1,1)).unwrap();
     screen.flush().unwrap()
 }
 
