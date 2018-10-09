@@ -120,8 +120,6 @@ impl Core {
             return vec![0f32; num_bins]
         }
 
-        let skip = ((*end - *start) * full_len) / num_bins as f64;
-        let interp_start = *start * full_len;
         let _pos = reader.seek(start_frame as u32);
         let section: Vec<i32> = reader.samples::<i32>()
             .take(num_frames)
@@ -129,8 +127,8 @@ impl Core {
             .collect();
 
         (0..num_bins).map(|n| {
-            let interp_index = (interp_start + (skip * n as f64)) - start_frame as f64;
-            //println!("{} {}", n, interp_index);
+            let interp_index = scale(n as f64, 0., num_bins as f64, 0., num_frames as f64);
+            //println!("{} {} {}", n, section.len(), interp_index);
             match interp_index {
                 ii if ii < 0f64 => 0f32,
                 ii if ii >= num_frames as f64 => 0f32,
@@ -211,6 +209,14 @@ mod tests {
     }
 
     #[test]
+    fn interpolate_samples_when_getting_short_block() {
+        let mut c = Core::new();
+        c.load("/Users/richard/Developer/wavr/resources/duskwolf.wav".to_string());
+        let s = c.get_samples(&0.3, &0.30005, 20);
+        assert!(s[19].abs() > 0.);
+    }
+
+    #[test]
     fn draws_samples() {
         let mut c = Core::new();
         c.load("/Users/richard/Developer/wavr/resources/duskwolf.wav".to_string());
@@ -225,9 +231,9 @@ mod tests {
         let mut c = Core::new();
         c.load("/Users/richard/Developer/wavr/resources/duskwolf.wav".to_string());
         let p = c.get_peaks(&-1., &0., 5);
-        assert_eq!(p, [None, None, None, None, None]);
+        assert_eq!(p.iter().fold(false, |a, b| a && b.is_none()), true);
         let p = c.get_peaks(&1., &2., 5);
-        assert_eq!(p, [0f32, 0f32, 0f32, 0f32, 0f32]);
+        assert_eq!(p.iter().fold(false, |a, b| a && b.is_none()), true);
     }
 
     #[test]
