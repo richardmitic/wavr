@@ -116,9 +116,9 @@ mod tests {
     #[test]
     fn creates_summary_from_file() {
         let w = WaveForm::from_file("./resources/duskwolf.wav");
-        println!("{:?}", w.summary_1k);
-        println!("{:?}", w.summary_8k);
-        println!("{:?}", w.summary_64k);
+        //println!("{:?}", w.summary_1k);
+        //println!("{:?}", w.summary_8k);
+        //println!("{:?}", w.summary_64k);
         assert_eq!(w.summary_1k.len(), 104);
         assert_eq!(w.summary_8k.len(), 13);
         assert_eq!(w.summary_64k.len(), 2);
