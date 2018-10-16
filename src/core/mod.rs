@@ -163,7 +163,7 @@ impl Core {
 //        }).collect::<Vec<f32>>()
 //    }
 
-    pub fn get_samples(&mut self, start: &f64, end: &f64, num_bins: usize) -> Vec<f32> {
+    pub fn get_samples(&mut self, start: &f64, end: &f64, num_bins: usize) -> Vec<Option<f32>> {
         let mut reader = WavReader::open(self.file.as_str()).unwrap();
         let _spec = reader.spec();
 
@@ -175,7 +175,7 @@ impl Core {
  
         let num_frames = end_frame - start_frame;
         if num_frames == 0 {
-            return vec![0f32; num_bins]
+            return vec![None; num_bins]
         }
 
         let _pos = reader.seek(start_frame as u32);
@@ -186,24 +186,32 @@ impl Core {
 
         interp_indices.into_iter().map(|x| {
             match x {
-                ii if ii < 0. => 0f32,
-                ii if ii >= full_len - 1. => 0f32,
+                ii if ii < 0. => None,
+                ii if ii >= full_len - 1. => None,
                 _ => {
                     let idx = x as usize - start_frame;
-                    section[idx] as f32
+                    Some(section[idx] as f32)
                 }
             }
-        }).collect::<Vec<f32>>()
+        }).collect::<Vec<Option<f32>>>()
     }
 
-    pub fn draw_samples(&mut self, samples: Vec<f32>, width: &usize, height: &usize) -> Vec<Vec<char>> {
+    pub fn draw_samples(&mut self, samples: Vec<Option<f32>>, width: &usize, height: &usize) -> Vec<Vec<char>> {
         let mut arr = vec![vec![' '; *width]; *height];
         let full_scale_max = (std::i16::MAX) as f64;
         let full_scale_min = (std::i16::MIN) as f64;
         let this_scale_max = (*height - 1) as f64;
-        samples.iter().enumerate().for_each(|(i, sample)| {
-            let col = scale(*sample as f64, full_scale_min, full_scale_max, this_scale_max, 0.) as usize;
-            arr[col][i] = self.chars.sample;
+        samples.into_iter().enumerate().for_each(|(i, sample)| {
+            match sample {
+                None => {
+                    let col = scale(0., full_scale_min, full_scale_max, this_scale_max, 0.) as usize;
+                    arr[col][i] = self.chars.none;
+                },
+                Some(x) => {
+                    let col = scale(x as f64, full_scale_min, full_scale_max, this_scale_max, 0.) as usize;
+                    arr[col][i] = self.chars.sample;
+                }
+            }
         });
 
         arr
@@ -268,7 +276,13 @@ mod tests {
         let mut c = Core::new();
         c.load("./resources/sine.wav".to_string());
         let s = c.get_samples(&0., &0.01, 20);
-        let expected = [0.0, 0.0, 0.0, 0.0, 214.0, 214.0, 214.0, 214.0, 430.0, 430.0, 430.0, 430.0, 642.0, 642.0, 642.0, 642.0, 858.0, 858.0, 858.0, 858.0];
+        let expected = [
+            Some(0.0), Some(0.0), Some(0.0), 
+            Some(0.0), Some(214.0), Some(214.0), Some(214.0), Some(214.0), 
+            Some(430.0), Some(430.0), Some(430.0), Some(430.0),
+            Some(642.0), Some(642.0), Some(642.0), Some(642.0),
+            Some(858.0), Some(858.0), Some(858.0), Some(858.0)
+        ];
         assert_eq!(s, expected);
     }
 
@@ -306,15 +320,15 @@ mod tests {
         let mut c = Core::new();
         c.load("./resources/sine.wav".to_string());
         let p = c.get_samples(&-1., &0., 5);
-        assert_eq!(p, [0f32, 0f32, 0f32, 0f32, 0f32]);
+        assert_eq!(p, [None, None, None, None, None]);
         let p = c.get_samples(&1., &2., 5);
-        assert_eq!(p, [0f32, 0f32, 0f32, 0f32, 0f32]);
+        assert_eq!(p, [None, None, None, None, None]);
         let p = c.get_samples(&0.5, &1.5, 5);
-        assert_ne!(p[0], 0f32);
-        assert_ne!(p[1], 0f32);
-        assert_eq!(p[2], 0f32);
-        assert_eq!(p[3], 0f32);
-        assert_eq!(p[4], 0f32);
+        assert_ne!(p[0], None);
+        assert_ne!(p[1], None);
+        assert_eq!(p[2], None);
+        assert_eq!(p[3], None);
+        assert_eq!(p[4], None);
     }
 
     fn assert_close_enough(x: f64, y: f64, epsilon: f64) {
