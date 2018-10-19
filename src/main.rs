@@ -62,20 +62,20 @@ impl ViewPoint {
 }
 
 
-fn print_wave_raw(core: &mut Core, width: &usize, height: &usize, view: View, screen: &mut Write) {
+fn print_wave(core: &mut Core, width: &usize, height: &usize, view: View, screen: &mut Write) {
     if core.should_draw_samples(&(view.0 as f64), &(view.1 as f64), width) {
         let samples = core.get_samples(&(view.0 as f64), &(view.1 as f64), *width as usize);
         let wave = core.draw_samples(samples, &width, &height);
-        print_pixels_raw(wave, screen, view);
+        print_pixels(wave, screen, view);
     } else {
         let peaks = core.get_peaks(&(view.0 as f64), &(view.1 as f64), *width as u32);
         let wave = core.draw_wave(peaks, &width, &height);
-        print_pixels_raw(wave, screen, view);
+        print_pixels(wave, screen, view);
     }
 }
 
 
-fn print_pixels_raw(wave: Vec<Vec<char>>, screen: &mut Write, view: View) {
+fn print_pixels(wave: Vec<Vec<char>>, screen: &mut Write, view: View) {
     write!(screen, "{}", termion::cursor::Goto(1,1)).unwrap();
     wave.iter().enumerate().for_each(|(i, line)| {
         write!(screen, "{}", termion::cursor::Goto(1, (i + 1) as u16)).unwrap();
@@ -163,7 +163,7 @@ fn main() {
     let view = view_point.get_view();
 
     if just_print {
-        print_wave_raw(&mut c, &width, &height, view, &mut stdout());
+        print_wave(&mut c, &width, &height, view, &mut stdout());
         return
     }
 
@@ -172,30 +172,30 @@ fn main() {
 
     setup_screen(&mut out);
 
-    print_wave_raw(&mut c, &width, &height, view, &mut out);
+    print_wave(&mut c, &width, &height, view, &mut out);
 
     for key in stdin.keys() {
         match key.unwrap() {
             Key::Char('q') => break,
             Key::Char('r') => {
                 let view = view_point.reset();
-                print_wave_raw(&mut c, &width, &height, view, &mut out);
+                print_wave(&mut c, &width, &height, view, &mut out);
             },
             Key::Left => {
                 let view = view_point.shift_left();
-                print_wave_raw(&mut c, &width, &height, view, &mut out);
+                print_wave(&mut c, &width, &height, view, &mut out);
             },
             Key::Right => {
                 let view = view_point.shift_right();
-                print_wave_raw(&mut c, &width, &height, view, &mut out);
+                print_wave(&mut c, &width, &height, view, &mut out);
             },
             Key::Up => {
                 let view = view_point.zoom_in();
-                print_wave_raw(&mut c, &width, &height, view, &mut out);
+                print_wave(&mut c, &width, &height, view, &mut out);
             },
             Key::Down => {
                 let view = view_point.zoom_out();
-                print_wave_raw(&mut c, &width, &height, view, &mut out);
+                print_wave(&mut c, &width, &height, view, &mut out);
             },
             _ => {}
         }
