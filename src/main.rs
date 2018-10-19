@@ -59,6 +59,10 @@ impl ViewPoint {
     fn get_view(&mut self) -> View {
         (self.begin, self.end)
     }
+
+    fn pretty_print(&mut self) -> String {
+        format!("b:{} e:{} ", self.begin, self.end)
+    } 
 }
 
 
@@ -66,21 +70,21 @@ fn print_wave_raw(core: &mut Core, width: &usize, height: &usize, view: View, sc
     if core.should_draw_samples(&(view.0 as f64), &(view.1 as f64), width) {
         let samples = core.get_samples(&(view.0 as f64), &(view.1 as f64), *width as usize);
         let wave = core.draw_samples(samples, &width, &height);
-        print_pixels_raw(wave, screen);
+        print_pixels_raw(wave, screen, view);
     } else {
         let peaks = core.get_peaks(&(view.0 as f64), &(view.1 as f64), *width as u32);
         let wave = core.draw_wave(peaks, &width, &height);
-        print_pixels_raw(wave, screen);
+        print_pixels_raw(wave, screen, view);
     }
 }
 
 fn print_wave_samples_raw(core: &mut Core, width: &usize, height: &usize, view: View, screen: &mut Write) {
     let samples = core.get_samples(&(view.0 as f64), &(view.1 as f64), *width as usize);
     let wave = core.draw_samples(samples, &width, &height);
-    print_pixels_raw(wave, screen);
+    print_pixels_raw(wave, screen, view);
 }
 
-fn print_pixels_raw(wave: Vec<Vec<char>>, screen: &mut Write) {
+fn print_pixels_raw(wave: Vec<Vec<char>>, screen: &mut Write, view: View) {
     write!(screen, "{}", termion::cursor::Goto(1,1)).unwrap();
     wave.iter().enumerate().for_each(|(i, line)| {
         write!(screen, "{}", termion::cursor::Goto(1, (i + 1) as u16)).unwrap();
@@ -88,7 +92,7 @@ fn print_pixels_raw(wave: Vec<Vec<char>>, screen: &mut Write) {
             write!(screen, "{}", pixel).unwrap();
         }
     });
-    //write!(screen, "{}", termion::cursor::Goto(1,1)).unwrap();
+    write!(screen, "{} {}:{}", termion::cursor::Goto(1,1), view.0, view.1).unwrap();
     screen.flush().unwrap();
 }
 

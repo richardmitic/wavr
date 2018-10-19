@@ -167,9 +167,9 @@ impl Core {
         let mut reader = WavReader::open(self.file.as_str()).unwrap();
         let _spec = reader.spec();
 
-        let full_len = reader.len() as f64;
+        let full_len = reader.duration() as f64;
         let bin_indices = (0..num_bins).map(|x| x as f64).collect();
-        let interp_indices = scale_vec(bin_indices, 0., num_bins as f64 - 1., *start * (full_len -1.), *end * (full_len - 1.));
+        let interp_indices = scale_vec(bin_indices, 0., num_bins as f64 - 1., *start * (full_len - 0.), *end * (full_len - 1.));
         let start_frame = interp_indices[0].min(full_len - 1.).max(0.) as usize;
         let end_frame = interp_indices[num_bins - 1].ceil().min(full_len - 1.).max(0.) as usize;
  
@@ -179,10 +179,11 @@ impl Core {
         }
 
         let _pos = reader.seek(start_frame as u32);
-        let section: Vec<i32> = reader.samples::<i32>()
+        let section = reader.samples::<i32>()
             .take(num_frames)
             .map(|s| s.unwrap())
-            .collect();
+            .collect::<Vec<i32>>();
+        assert_eq!(num_frames, section.len());
 
         interp_indices.into_iter().map(|x| {
             match x {
@@ -313,6 +314,43 @@ mod tests {
         let p = c.get_peaks(&0.074016, &0.401696, 181);
         let w = c.draw_wave(p, &181, &30);
         assert_eq!(w.len(), 30);
+    }
+
+    #[test]
+    fn panic2() {
+        let mut c = Core::new();
+        c.load("/Users/richardmitic/Music/mmm.wav".to_string());
+        let p = c.get_samples(&0.48874100093157374, &0.5168884986026394, 204);
+        let w = c.draw_samples(p, &204, &30);
+        assert_eq!(w.len(), 30);
+    }
+
+
+    #[test]
+    fn gets_correct_samples() {
+        let mut c = Core::new();
+        c.load("./resources/ramp.wav".to_string());
+        let p = c.get_samples(&0., &(100. / 1024.), 100);
+        println!("{:?}", p);
+        for i in 0..100 {
+            assert_close_enough(p[i].unwrap() as f64, i as f64, 0.0000001);
+        }
+    }
+
+    #[test]
+    fn gets_correct_samples_middle() {
+        let mut c = Core::new();
+        c.load("./resources/ramp.wav".to_string());
+        for j in 1..10 {
+            let start = (j as f64) * 100.;
+            let end = start + 100.;
+            let p = c.get_samples(&(start / 1024.), &(end / 1024.), 100);
+            assert_eq!(p.len(), 100);
+            println!("{:?}", p);
+            for i in 0..100 {
+                assert_close_enough(p[i].unwrap() as f64, i as f64 + start, 0.0000001);
+            }
+        }
     }
 
     #[test]
