@@ -58,6 +58,7 @@ impl Mul<f32> for WaveSection {
     }
 }
 
+
 pub struct WaveForm {
     pub summary_64: Vec<WaveSection>,
     pub summary_1k: Vec<WaveSection>,

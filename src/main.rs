@@ -64,8 +64,8 @@ impl ViewPoint {
 
 fn print_wave(core: &mut Core, width: &usize, height: &usize, view: View, screen: &mut Write) {
     if core.should_draw_samples(&(view.0 as f64), &(view.1 as f64), width) {
-        let samples = core.get_samples(&(view.0 as f64), &(view.1 as f64), *width as usize);
-        let wave = core.draw_samples(samples, &width, &height);
+        let samples = core.get_samples_multichannel(&(view.0 as f64), &(view.1 as f64), *width as usize);
+        let wave = core.draw_samples_multichannel(samples, &width, &height);
         print_pixels(wave, screen, view);
     } else {
         let peaks = core.get_peaks(&(view.0 as f64), &(view.1 as f64), *width as u32);

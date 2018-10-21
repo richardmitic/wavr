@@ -1,11 +1,16 @@
 extern crate hound;
+extern crate rand;
+
 mod waveform;
 
 use std;
 use std::string::String;
+use self::rand::Rng;
 use self::waveform::{ WaveForm, WaveSection };
 use self::hound::WavReader;
 
+type WavePeaksChannel = Vec<Option<WaveSection>>;
+type WaveSamplesChannel = Vec<Option<f32>>;
 
 fn scale(x: f64, in_min: f64, in_max: f64, out_min: f64, out_max: f64) -> f64 {
     (((out_max - out_min) * (x - in_min)) / (in_max - in_min)) + out_min
@@ -19,17 +24,34 @@ fn floor_n(x: usize, n: usize) -> usize {
     (x / n) * n
 }
 
-fn split_into_channels(samples: Vec<f32>, n: usize) -> Vec<Vec<f32>> {
+fn split_into_channels(samples: WaveSamplesChannel, n: usize) -> Vec<WaveSamplesChannel> {
     (0..n).map(|chan| {
         samples.iter()
             .skip(chan)
             .step_by(n)
             .map(|s_ptr| *s_ptr)
-            .collect::<Vec<f32>>()
-    }).collect::<Vec<Vec<f32>>>()
+            .collect::<WaveSamplesChannel>()
+    }).collect::<Vec<WaveSamplesChannel>>()
 }
 
-type WavePeaksChannel = Vec<Option<WaveSection>>;
+fn interp_lookup(samples: Vec<WaveSamplesChannel>, start_frame: usize, full_len: f64, indices: Vec<f64>) -> Vec<WaveSamplesChannel> {
+    let mut new_samples: Vec<WaveSamplesChannel> = vec![vec![None; indices.len()]; samples.len()];
+
+    for i in 0..indices.len() {
+        for channel in 0..samples.len() {
+            new_samples[channel][i] = match indices[i] {
+                ii if ii < 0. => None,
+                ii if ii >= full_len => None,
+                _ => {
+                    let idx = indices[i] as usize - start_frame;
+                    samples[channel][idx]
+                }
+            }
+        }
+    }
+
+    new_samples
+}
 
 pub struct DisplayChars {
     rms: char,
@@ -63,6 +85,10 @@ impl Core {
     pub fn load(&mut self, f: String) {
         self.file = f;
         self.summary = Some(WaveForm::from_file(&self.file));
+    }
+
+    pub fn channels(&mut self) -> usize {
+        self.summary.as_ref().unwrap().channels as usize
     }
 
     pub fn get_peaks(&mut self, start: &f64, end: &f64, num_peaks: u32) -> WavePeaksChannel {
@@ -125,79 +151,33 @@ impl Core {
         arr
     }
 
-
-//    pub fn get_samples_multichannel(&mut self, start: &f64, end: &f64, num_bins: usize) -> Vec<Vec<f32>> {
-//        let mut reader = WavReader::open(self.file.as_str()).unwrap();
-//        let spec = reader.spec();
-//
-//        let clipped_start = (*start).min(1.).max(0.);
-//        let clipped_end = (*end).min(1.).max(0.);
-//        let full_len = reader.len() as f64;
-//        let start_frame = floor_n(((full_len - 1.) * clipped_start) as usize, spec.channels as usize);
-//        let end_frame = floor_n(((full_len - 1.) * clipped_end) as usize, spec.channels as usize);
-//        let num_frames = end_frame - start_frame;
-//
-//        if num_frames == 0 {
-//            return vec![vec![0f32; num_bins]; spec.channels as usize]
-//        }
-//
-//        let _pos = reader.seek(start_frame as u32);
-//        let section: Vec<i32> = reader.samples::<i32>()
-//            .take(num_frames)
-//            .map(|s| s.unwrap())
-//            .collect();
-//
-//
-//        (0..num_bins).map(|n| {
-//            let interp_index = scale(n as f64, 0., num_bins as f64, 0., num_frames as f64);
-//            //println!("{} {} {}", n, section.len(), interp_index);
-//            match interp_index {
-//                ii if ii < 0f64 => 0f32,
-//                ii if ii >= num_frames as f64 => 0f32,
-//                _ => {
-//                    let int_index = interp_index as usize;
-//                    section[int_index] as f32
-//                }
-//            }
-//
-//        }).collect::<Vec<f32>>()
-//    }
-
-    pub fn get_samples(&mut self, start: &f64, end: &f64, num_bins: usize) -> Vec<Option<f32>> {
+    pub fn get_samples_multichannel(&mut self, start: &f64, end: &f64, num_bins: usize) -> Vec<WaveSamplesChannel> {
         let mut reader = WavReader::open(self.file.as_str()).unwrap();
         let _spec = reader.spec();
 
         let full_len = reader.duration() as f64;
         let bin_indices = (0..num_bins).map(|x| x as f64).collect();
-        let interp_indices = scale_vec(bin_indices, 0., num_bins as f64 - 1., *start * (full_len - 0.), *end * (full_len - 1.));
+        let interp_indices = scale_vec(bin_indices, 0., num_bins as f64 - 1., *start * full_len, *end * (full_len - 1.));
         let start_frame = interp_indices[0].min(full_len - 1.).max(0.) as usize;
-        let end_frame = interp_indices[num_bins - 1].ceil().min(full_len - 1.).max(0.) as usize;
- 
-        let num_frames = end_frame - start_frame;
-        if num_frames == 0 {
-            return vec![None; num_bins]
+        let end_frame = interp_indices[num_bins - 1].min(full_len - 1.).max(0.) as usize;
+
+        let num_samples = ((end_frame - start_frame) + 1) * self.channels();
+        if num_samples == 0 {
+            return vec![vec![None; num_bins]; self.channels()];
         }
 
         let _pos = reader.seek(start_frame as u32);
-        let section = reader.samples::<i32>()
-            .take(num_frames)
-            .map(|s| s.unwrap())
-            .collect::<Vec<i32>>();
-        assert_eq!(num_frames, section.len());
+        let section = reader.samples::<i16>()
+            .take(num_samples)
+            .map(|s| Some(s.unwrap() as f32))
+            .collect::<WaveSamplesChannel>();
+        assert_eq!(num_samples, section.len());
 
-        interp_indices.into_iter().map(|x| {
-            match x {
-                ii if ii < 0. => None,
-                ii if ii >= full_len - 1. => None,
-                _ => {
-                    let idx = x as usize - start_frame;
-                    Some(section[idx] as f32)
-                }
-            }
-        }).collect::<Vec<Option<f32>>>()
+        let multichannel_samples = split_into_channels(section, self.channels());
+        interp_lookup(multichannel_samples, start_frame, full_len, interp_indices)
     }
 
-    pub fn draw_samples(&mut self, samples: Vec<Option<f32>>, width: &usize, height: &usize) -> Vec<Vec<char>> {
+    pub fn draw_samples(&mut self, samples: WaveSamplesChannel, width: &usize, height: &usize) -> Vec<Vec<char>> {
         let mut arr = vec![vec![' '; *width]; *height];
         let full_scale_max = (std::i16::MAX) as f64;
         let full_scale_min = (std::i16::MIN) as f64;
@@ -223,6 +203,17 @@ impl Core {
         let num_peaks = self.summary.as_ref().unwrap().summary_64.len() as f64 * range;
         num_peaks < (width / 2) as f64
     }
+
+    pub fn draw_samples_multichannel(&mut self, samples: Vec<WaveSamplesChannel>, width: &usize, height: &usize) -> Vec<Vec<char>> {
+        let float_height = *height as f32 / self.channels() as f32;
+        let mut heights = vec![0; self.channels()];
+        for n in 0..self.channels() {
+            heights[n] = (float_height * (n + 1) as f32) as usize - (float_height * n as f32) as usize;
+        }
+        samples.into_iter().zip(heights).flat_map(|(chan, this_height)| {
+            self.draw_samples(chan.to_vec(), width, &this_height).into_iter()
+        }).collect::<Vec<Vec<char>>>()
+    }
 }
 
 #[cfg(test)]
@@ -247,52 +238,11 @@ mod tests {
     }
 
     #[test]
-    fn gets_samples() {
-        let mut c = Core::new();
-        c.load("./resources/duskwolf.wav".to_string());
-        let s = c.get_samples(&0.3, &0.3015, 30);
-        //println!("{:?}", s);
-        assert_eq!(s.len(), 30);
-    }
-
-    #[test]
-    fn gets_samples_2() {
-        let mut c = Core::new();
-        c.load("./resources/duskwolf.wav".to_string());
-        let s = c.get_samples(&0.3, &0.3015, 164);
-        //println!("{:?}", s);
-        assert_eq!(s.len(), 164);
-    }
-
-    #[test]
-    fn draws_samples_big() {
-        let mut c = Core::new();
-        c.load("./resources/duskwolf.wav".to_string());
-        let s = c.get_samples(&0.1, &0.9, 120);
-        let w = c.draw_samples(s, &120, &60);
-    }
-
-    #[test]
-    fn interpolate_samples_when_getting_short_block() {
-        let mut c = Core::new();
-        c.load("./resources/sine.wav".to_string());
-        let s = c.get_samples(&0., &0.01, 20);
-        let expected = [
-            Some(0.0), Some(0.0), Some(0.0), 
-            Some(0.0), Some(214.0), Some(214.0), Some(214.0), Some(214.0), 
-            Some(430.0), Some(430.0), Some(430.0), Some(430.0),
-            Some(642.0), Some(642.0), Some(642.0), Some(642.0),
-            Some(858.0), Some(858.0), Some(858.0), Some(858.0)
-        ];
-        assert_eq!(s, expected);
-    }
-
-    #[test]
     fn draws_samples() {
         let mut c = Core::new();
         c.load("./resources/duskwolf.wav".to_string());
-        let s = c.get_samples(&0.3, &0.3015, 30);
-        let w = c.draw_samples(s, &120, &30);
+        let s = c.get_samples_multichannel(&0.3, &0.3015, 30);
+        let w = c.draw_samples_multichannel(s, &120, &30);
         assert_eq!(w.len(), 30);
         assert_eq!(w[0].len(), 120);
     }
@@ -305,68 +255,6 @@ mod tests {
         assert_eq!(p.iter().fold(true, |a, b| a && b.is_none()), true);
         let p = c.get_peaks(&1., &2., 5);
         assert_eq!(p.iter().fold(true, |a, b| a && b.is_none()), true);
-    }
-
-    #[test]
-    fn panic1() {
-        let mut c = Core::new();
-        c.load("./resources/duskwolf.wav".to_string());
-        let p = c.get_peaks(&0.074016, &0.401696, 181);
-        let w = c.draw_wave(p, &181, &30);
-        assert_eq!(w.len(), 30);
-    }
-
-    #[test]
-    fn panic2() {
-        let mut c = Core::new();
-        c.load("/Users/richardmitic/Music/mmm.wav".to_string());
-        let p = c.get_samples(&0.48874100093157374, &0.5168884986026394, 204);
-        let w = c.draw_samples(p, &204, &30);
-        assert_eq!(w.len(), 30);
-    }
-
-
-    #[test]
-    fn gets_correct_samples() {
-        let mut c = Core::new();
-        c.load("./resources/ramp.wav".to_string());
-        let p = c.get_samples(&0., &(100. / 1024.), 100);
-        println!("{:?}", p);
-        for i in 0..100 {
-            assert_close_enough(p[i].unwrap() as f64, i as f64, 0.0000001);
-        }
-    }
-
-    #[test]
-    fn gets_correct_samples_middle() {
-        let mut c = Core::new();
-        c.load("./resources/ramp.wav".to_string());
-        for j in 1..10 {
-            let start = (j as f64) * 100.;
-            let end = start + 100.;
-            let p = c.get_samples(&(start / 1024.), &(end / 1024.), 100);
-            assert_eq!(p.len(), 100);
-            println!("{:?}", p);
-            for i in 0..100 {
-                assert_close_enough(p[i].unwrap() as f64, i as f64 + start, 0.0000001);
-            }
-        }
-    }
-
-    #[test]
-    fn out_of_bounds_samples_are_zero() {
-        let mut c = Core::new();
-        c.load("./resources/sine.wav".to_string());
-        let p = c.get_samples(&-1., &0., 5);
-        assert_eq!(p, [None, None, None, None, None]);
-        let p = c.get_samples(&1., &2., 5);
-        assert_eq!(p, [None, None, None, None, None]);
-        let p = c.get_samples(&0.5, &1.5, 5);
-        assert_ne!(p[0], None);
-        assert_ne!(p[1], None);
-        assert_eq!(p[2], None);
-        assert_eq!(p[3], None);
-        assert_eq!(p[4], None);
     }
 
     fn assert_close_enough(x: f64, y: f64, epsilon: f64) {
@@ -395,16 +283,150 @@ mod tests {
 
     #[test]
     fn split_stero() {
-        let samples: Vec<f32> = (0..8).into_iter().map(|i| i as f32).collect();
+        let samples: Vec<Option<f32>> = (0..8).into_iter().map(|i| Some(i as f32)).collect();
         let channels = split_into_channels(samples, 2);
-        assert_eq!(channels[0], vec![0f32,2f32,4f32,6f32]);
-        assert_eq!(channels[1], vec![1f32,3f32,5f32,7f32]);
+        assert_eq!(channels[0], vec![Some(0f32), Some(2f32), Some(4f32), Some(6f32)]);
+        assert_eq!(channels[1], vec![Some(1f32), Some(3f32), Some(5f32), Some(7f32)]);
     }
 
     #[test]
     fn mono_samples_reshaped() {
-        let samples: Vec<f32> = (0..8).into_iter().map(|i| i as f32).collect();
+        let samples: Vec<Option<f32>> = (0..8).into_iter().map(|i| Some(i as f32)).collect();
         let channels = split_into_channels(samples.clone(), 1);
         assert_eq!(channels[0], samples);
+    }
+
+    #[test]
+    fn gets_mono_samples() {
+        let mut c = Core::new();
+        c.load("./resources/sine.wav".to_string());
+        let p = c.get_samples_multichannel(&0., &1., 480);
+        assert_eq!(p.len(), 1);
+        assert_eq!(p[0].len(), 480);
+    }
+
+    #[test]
+    fn gets_stereo_samples_0_1() {
+        let mut c = Core::new();
+        c.load("./resources/stereo_ramp.wav".to_string());
+        let p = c.get_samples_multichannel(&0., &1., 8);
+        assert_eq!(p[0], vec![Some(0f32), Some(1f32), Some(2f32), Some(3f32), Some(4f32), Some(5f32), Some(6f32), Some(7f32)]);
+        assert_eq!(p[1], vec![Some(8f32), Some(9f32), Some(10f32), Some(11f32), Some(12f32), Some(13f32), Some(14f32), Some(15f32)]);
+    }
+
+    #[test]
+    fn gets_stereo_samples_0_05() {
+        let mut c = Core::new();
+        c.load("./resources/stereo_ramp.wav".to_string());
+        let p = c.get_samples_multichannel(&0., &0.5, 4);
+        assert_eq!(p[0], vec![Some(0f32), Some(1f32), Some(2f32), Some(3f32)]);
+        assert_eq!(p[1], vec![Some(8f32), Some(9f32), Some(10f32), Some(11f32)]);
+    }
+
+    #[test]
+    fn gets_stereo_samples_05_1() {
+        let mut c = Core::new();
+        c.load("./resources/stereo_ramp.wav".to_string());
+        let p = c.get_samples_multichannel(&0.5, &1., 4);
+        assert_eq!(p[0], vec![Some(4f32), Some(5f32), Some(6f32), Some(7f32)]);
+        assert_eq!(p[1], vec![Some(12f32), Some(13f32), Some(14f32), Some(15f32)]);
+    }
+
+    #[test]
+    fn gets_stereo_samples_025_075() {
+        let mut c = Core::new();
+        c.load("./resources/stereo_ramp.wav".to_string());
+        let p = c.get_samples_multichannel(&0.25, &0.75, 4);
+        assert_eq!(p[0], vec![Some(2f32), Some(3f32), Some(4f32), Some(5f32)]);
+        assert_eq!(p[1], vec![Some(10f32), Some(11f32), Some(12f32), Some(13f32)]);
+    }
+    
+    #[test]
+    fn gets_stereo_samples_neg1_0() {
+        let mut c = Core::new();
+        c.load("./resources/stereo_ramp.wav".to_string());
+        let p = c.get_samples_multichannel(&-1., &0., 4);
+        assert_eq!(p, vec![vec![None, None, None, Some(0f32)], vec![None, None, None, Some(8f32)]]);
+    }
+
+    #[test]
+    fn gets_stereo_samples_neg05_05() {
+        let mut c = Core::new();
+        c.load("./resources/stereo_ramp.wav".to_string());
+        let p = c.get_samples_multichannel(&-0.5, &0.5, 8);
+        assert_eq!(p, vec![
+                   vec![None, None, None, None, Some(0f32), Some(1f32), Some(2f32), Some(3f32)], 
+                   vec![None, None, None, None, Some(8f32), Some(9f32), Some(10f32), Some(11f32)]
+        ]);
+    }
+
+    #[test]
+    fn gets_stereo_samples_1_2() {
+        let mut c = Core::new();
+        c.load("./resources/stereo_ramp.wav".to_string());
+        let p = c.get_samples_multichannel(&1., &2., 4);
+        assert_eq!(p, vec![vec![None; 4]; 2]);
+    }
+
+    #[test]
+    fn gets_stereo_samples_0_1_long() {
+        let mut c = Core::new();
+        c.load("./resources/stereo_ramp.wav".to_string());
+        let p = c.get_samples_multichannel(&0., &1., 12);
+        assert_eq!(p[0], vec![Some(0.0), Some(0.0), Some(1.0), Some(1.0), Some(2.0), Some(3.0), Some(3.0), Some(4.0), Some(5.0), Some(5.0), Some(6.0), Some(7.0)]);
+        assert_eq!(p[1], vec![Some(8.0), Some(8.0), Some(9.0), Some(9.0), Some(10.0), Some(11.0), Some(11.0), Some(12.0), Some(13.0), Some(13.0), Some(14.0), Some(15.0)]);
+    }
+
+    #[test]
+    fn draws_stereo_samples_even_height() {
+        let mut c = Core::new();
+        c.load("./resources/stereo.wav".to_string());
+        let p = c.get_samples_multichannel(&0., &0.25, 120);
+        let w = c.draw_samples_multichannel(p, &120, &40);
+        assert_eq!(w.len(), 40);
+        assert_eq!(w[0].len(), 120);
+        assert_eq!(w[0].len(), 120);
+        w.iter().for_each(|row: &Vec<char>| println!("{:?}", row.iter().collect::<String>()));
+    }
+
+    #[test]
+    fn draws_stereo_samples_odd_height() {
+        let mut c = Core::new();
+        c.load("./resources/stereo.wav".to_string());
+        let p = c.get_samples_multichannel(&0., &0.25, 120);
+        let w = c.draw_samples_multichannel(p, &120, &41);
+        assert_eq!(w.len(), 41);
+        assert_eq!(w[0].len(), 120);
+        assert_eq!(w[0].len(), 120);
+        w.iter().for_each(|row: &Vec<char>| println!("{:?}", row.iter().collect::<String>()));
+    }
+
+    #[ignore]
+    #[test]
+    fn look_for_panics() {
+        let iters = 1000;
+        let min_start = -1f64;
+        let max_start = 0.5f64;
+        let min_len = 0.1f64;
+        let max_len = 2f64;
+        let min_width: usize = 10;
+        let max_width: usize = 300;
+        let min_height: usize = 10;
+        let max_height: usize = 100;
+
+        let mut rng = rand::thread_rng();
+
+        for _ in 0..iters {
+            let start = rng.gen_range::<f64>(min_start, max_start);
+            let end = start + rng.gen_range::<f64>(min_len, max_len);
+            let w = rng.gen_range::<usize>(min_width, max_width);
+            let h = rng.gen_range::<usize>(min_height, max_height);
+            println!("{} {} {} {}", start, end, w, h);
+
+            let mut c = Core::new();
+            c.load("./resources/stereo.wav".to_string());
+            let a = c.get_samples_multichannel(&start, &end, w);
+            let b = c.draw_samples_multichannel(a, &w, &h);
+        }
     }
 }
