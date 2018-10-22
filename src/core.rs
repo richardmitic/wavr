@@ -1,16 +1,15 @@
 extern crate hound;
 extern crate rand;
 
-mod waveform;
-
 use std;
 use std::string::String;
-use self::rand::Rng;
-use self::waveform::{ WaveForm, WaveSection };
+use self::rand::{ Rng };
+use waveform::{ WaveForm, WaveSection };
 use self::hound::WavReader;
+use util::{ FileType, get_type };
+use pcm::{ WaveSamplesChannel, get_duration, read_wavesection };
 
 type WavePeaksChannel = Vec<Option<WaveSection>>;
-type WaveSamplesChannel = Vec<Option<f32>>;
 
 fn scale(x: f64, in_min: f64, in_max: f64, out_min: f64, out_max: f64) -> f64 {
     (((out_max - out_min) * (x - in_min)) / (in_max - in_min)) + out_min
@@ -18,10 +17,6 @@ fn scale(x: f64, in_min: f64, in_max: f64, out_min: f64, out_max: f64) -> f64 {
 
 fn scale_vec(arr: Vec<f64>, in_min: f64, in_max: f64, out_min: f64, out_max: f64) -> Vec<f64> {
     arr.into_iter().map(|x| scale(x, in_min, in_max, out_min, out_max)).collect()
-}
-
-fn floor_n(x: usize, n: usize) -> usize {
-    (x / n) * n
 }
 
 fn split_into_channels(samples: WaveSamplesChannel, n: usize) -> Vec<WaveSamplesChannel> {
@@ -63,6 +58,7 @@ pub struct DisplayChars {
 
 pub struct Core {
     file: String,
+    filetype: FileType,
     summary: Option<WaveForm>,
     chars: DisplayChars
 }
@@ -71,6 +67,7 @@ impl Core {
     pub fn new() -> Core {
         Core {
             file: String::new(),
+            filetype: FileType::PCM,
             summary: Option::None,
             chars: DisplayChars {
                 rms: 'o',
@@ -82,9 +79,10 @@ impl Core {
         }
     }
 
-    pub fn load(&mut self, f: String) {
+    pub fn load(&mut self, f: String, channels: Option<u16>) {
         self.file = f;
-        self.summary = Some(WaveForm::from_file(&self.file));
+        self.filetype = get_type(&self.file);
+        self.summary = Some(WaveForm::from_file(&self.file, &self.filetype, channels));
     }
 
     pub fn channels(&mut self) -> usize {
@@ -152,6 +150,31 @@ impl Core {
     }
 
     pub fn get_samples_multichannel(&mut self, start: &f64, end: &f64, num_bins: usize) -> Vec<WaveSamplesChannel> {
+        match &self.filetype {
+            &FileType::WAV => self.get_samples_multichannel_wav(start, end, num_bins),
+            _ => self.get_samples_multichannel_pcm(start, end, num_bins)
+        }
+    }
+
+    pub fn get_samples_multichannel_pcm(&mut self, start: &f64, end: &f64, num_bins: usize) -> Vec<WaveSamplesChannel> {
+        let channels = self.channels();
+        let full_len = get_duration(&self.file, &channels) as f64;
+        let bin_indices = (0..num_bins).map(|x| x as f64).collect();
+        let interp_indices = scale_vec(bin_indices, 0., num_bins as f64 - 1., *start * full_len, *end * (full_len - 1.));
+        let start_frame = interp_indices[0].min(full_len - 1.).max(0.) as usize;
+        let end_frame = interp_indices[num_bins - 1].min(full_len - 1.).max(0.) as usize;
+
+        let num_samples = ((end_frame - start_frame) + 1) * channels;
+        if num_samples == 0 {
+            return vec![vec![None; num_bins]; self.channels()];
+        }
+
+        let section = read_wavesection(&self.file, start_frame * &channels, Some(num_samples));
+        let multichannel_samples = split_into_channels(section, self.channels());
+        interp_lookup(multichannel_samples, start_frame, full_len, interp_indices)
+    } 
+
+    pub fn get_samples_multichannel_wav(&mut self, start: &f64, end: &f64, num_bins: usize) -> Vec<WaveSamplesChannel> {
         let mut reader = WavReader::open(self.file.as_str()).unwrap();
         let _spec = reader.spec();
 
@@ -223,7 +246,7 @@ mod tests {
     #[test]
     fn loads_file() {
         let mut c = Core::new();
-        c.load("./resources/duskwolf.wav".to_string());
+        c.load("./resources/duskwolf.wav".to_string(), None);
         let p = c.get_peaks(&0., &1., 20);
         assert_eq!(p.len(), 20);
     }
@@ -231,7 +254,7 @@ mod tests {
     #[test]
     fn draws_wave() {
         let mut c = Core::new();
-        c.load("./resources/duskwolf.wav".to_string());
+        c.load("./resources/duskwolf.wav".to_string(), None);
         let p = c.get_peaks(&0., &1., 120);
         let w = c.draw_wave(p, &120, &30);
         w.iter().for_each(|row: &Vec<char>| println!("{:?}", row.iter().collect::<String>()));
@@ -240,7 +263,7 @@ mod tests {
     #[test]
     fn draws_samples() {
         let mut c = Core::new();
-        c.load("./resources/duskwolf.wav".to_string());
+        c.load("./resources/duskwolf.wav".to_string(), None);
         let s = c.get_samples_multichannel(&0.3, &0.3015, 30);
         let w = c.draw_samples_multichannel(s, &120, &30);
         assert_eq!(w.len(), 30);
@@ -250,7 +273,7 @@ mod tests {
     #[test]
     fn out_of_bounds_peaks_are_zero() {
         let mut c = Core::new();
-        c.load("./resources/duskwolf.wav".to_string());
+        c.load("./resources/duskwolf.wav".to_string(), None);
         let p = c.get_peaks(&-1., &0., 5);
         assert_eq!(p.iter().fold(true, |a, b| a && b.is_none()), true);
         let p = c.get_peaks(&1., &2., 5);
@@ -299,7 +322,7 @@ mod tests {
     #[test]
     fn gets_mono_samples() {
         let mut c = Core::new();
-        c.load("./resources/sine.wav".to_string());
+        c.load("./resources/sine.wav".to_string(), None);
         let p = c.get_samples_multichannel(&0., &1., 480);
         assert_eq!(p.len(), 1);
         assert_eq!(p[0].len(), 480);
@@ -308,7 +331,7 @@ mod tests {
     #[test]
     fn gets_stereo_samples_0_1() {
         let mut c = Core::new();
-        c.load("./resources/stereo_ramp.wav".to_string());
+        c.load("./resources/stereo_ramp.wav".to_string(), None);
         let p = c.get_samples_multichannel(&0., &1., 8);
         assert_eq!(p[0], vec![Some(0f32), Some(1f32), Some(2f32), Some(3f32), Some(4f32), Some(5f32), Some(6f32), Some(7f32)]);
         assert_eq!(p[1], vec![Some(8f32), Some(9f32), Some(10f32), Some(11f32), Some(12f32), Some(13f32), Some(14f32), Some(15f32)]);
@@ -317,7 +340,7 @@ mod tests {
     #[test]
     fn gets_stereo_samples_0_05() {
         let mut c = Core::new();
-        c.load("./resources/stereo_ramp.wav".to_string());
+        c.load("./resources/stereo_ramp.wav".to_string(), None);
         let p = c.get_samples_multichannel(&0., &0.5, 4);
         assert_eq!(p[0], vec![Some(0f32), Some(1f32), Some(2f32), Some(3f32)]);
         assert_eq!(p[1], vec![Some(8f32), Some(9f32), Some(10f32), Some(11f32)]);
@@ -326,7 +349,7 @@ mod tests {
     #[test]
     fn gets_stereo_samples_05_1() {
         let mut c = Core::new();
-        c.load("./resources/stereo_ramp.wav".to_string());
+        c.load("./resources/stereo_ramp.wav".to_string(), None);
         let p = c.get_samples_multichannel(&0.5, &1., 4);
         assert_eq!(p[0], vec![Some(4f32), Some(5f32), Some(6f32), Some(7f32)]);
         assert_eq!(p[1], vec![Some(12f32), Some(13f32), Some(14f32), Some(15f32)]);
@@ -335,7 +358,7 @@ mod tests {
     #[test]
     fn gets_stereo_samples_025_075() {
         let mut c = Core::new();
-        c.load("./resources/stereo_ramp.wav".to_string());
+        c.load("./resources/stereo_ramp.wav".to_string(), None);
         let p = c.get_samples_multichannel(&0.25, &0.75, 4);
         assert_eq!(p[0], vec![Some(2f32), Some(3f32), Some(4f32), Some(5f32)]);
         assert_eq!(p[1], vec![Some(10f32), Some(11f32), Some(12f32), Some(13f32)]);
@@ -344,7 +367,7 @@ mod tests {
     #[test]
     fn gets_stereo_samples_neg1_0() {
         let mut c = Core::new();
-        c.load("./resources/stereo_ramp.wav".to_string());
+        c.load("./resources/stereo_ramp.wav".to_string(), None);
         let p = c.get_samples_multichannel(&-1., &0., 4);
         assert_eq!(p, vec![vec![None, None, None, Some(0f32)], vec![None, None, None, Some(8f32)]]);
     }
@@ -352,7 +375,7 @@ mod tests {
     #[test]
     fn gets_stereo_samples_neg05_05() {
         let mut c = Core::new();
-        c.load("./resources/stereo_ramp.wav".to_string());
+        c.load("./resources/stereo_ramp.wav".to_string(), None);
         let p = c.get_samples_multichannel(&-0.5, &0.5, 8);
         assert_eq!(p, vec![
                    vec![None, None, None, None, Some(0f32), Some(1f32), Some(2f32), Some(3f32)], 
@@ -363,7 +386,7 @@ mod tests {
     #[test]
     fn gets_stereo_samples_1_2() {
         let mut c = Core::new();
-        c.load("./resources/stereo_ramp.wav".to_string());
+        c.load("./resources/stereo_ramp.wav".to_string(), None);
         let p = c.get_samples_multichannel(&1., &2., 4);
         assert_eq!(p, vec![vec![None; 4]; 2]);
     }
@@ -371,7 +394,7 @@ mod tests {
     #[test]
     fn gets_stereo_samples_0_1_long() {
         let mut c = Core::new();
-        c.load("./resources/stereo_ramp.wav".to_string());
+        c.load("./resources/stereo_ramp.wav".to_string(), None);
         let p = c.get_samples_multichannel(&0., &1., 12);
         assert_eq!(p[0], vec![Some(0.0), Some(0.0), Some(1.0), Some(1.0), Some(2.0), Some(3.0), Some(3.0), Some(4.0), Some(5.0), Some(5.0), Some(6.0), Some(7.0)]);
         assert_eq!(p[1], vec![Some(8.0), Some(8.0), Some(9.0), Some(9.0), Some(10.0), Some(11.0), Some(11.0), Some(12.0), Some(13.0), Some(13.0), Some(14.0), Some(15.0)]);
@@ -380,7 +403,7 @@ mod tests {
     #[test]
     fn draws_stereo_samples_even_height() {
         let mut c = Core::new();
-        c.load("./resources/stereo.wav".to_string());
+        c.load("./resources/stereo.wav".to_string(), None);
         let p = c.get_samples_multichannel(&0., &0.25, 120);
         let w = c.draw_samples_multichannel(p, &120, &40);
         assert_eq!(w.len(), 40);
@@ -392,7 +415,7 @@ mod tests {
     #[test]
     fn draws_stereo_samples_odd_height() {
         let mut c = Core::new();
-        c.load("./resources/stereo.wav".to_string());
+        c.load("./resources/stereo.wav".to_string(), None);
         let p = c.get_samples_multichannel(&0., &0.25, 120);
         let w = c.draw_samples_multichannel(p, &120, &41);
         assert_eq!(w.len(), 41);
@@ -424,7 +447,7 @@ mod tests {
             println!("{} {} {} {}", start, end, w, h);
 
             let mut c = Core::new();
-            c.load("./resources/stereo.wav".to_string());
+            c.load("./resources/stereo.wav".to_string(), None);
             let a = c.get_samples_multichannel(&start, &end, w);
             let b = c.draw_samples_multichannel(a, &w, &h);
         }

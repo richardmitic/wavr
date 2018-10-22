@@ -2,6 +2,9 @@ extern crate clap;
 extern crate termion;
 
 mod core;
+mod pcm;
+mod waveform;
+mod util;
 
 use clap::App;
 use core::Core;
@@ -135,6 +138,10 @@ fn main() {
             .short("z")
             .default_value("0.1")
             .help("Amount to zoom in and out per key press"))
+        .arg(clap::Arg::with_name("channels")
+             .short("c")
+             .default_value("1")
+             .help("Number of channels whean reading from a raw PCM file"))
         .arg(clap::Arg::with_name("print")
             .short("p")
             .takes_value(false)
@@ -144,6 +151,7 @@ fn main() {
     let size = terminal_size().unwrap();
 
     let filepath = matches.value_of("INPUT");
+    let channels = matches.value_of("channels").unwrap().parse().unwrap_or(1) as u16;
     let width = matches.value_of("width").unwrap().parse().unwrap_or(size.0) as usize;
     let height = matches.value_of("height").unwrap().parse().unwrap_or(size.1) as usize;
     let just_print = matches.occurrences_of("print") > 0;
@@ -158,7 +166,7 @@ fn main() {
     println!("{:?}", filepath);
 
     let mut c = Core::new();
-    c.load(filepath.unwrap().to_string());
+    c.load(filepath.unwrap().to_string(), Some(channels));
 
     let view = view_point.get_view();
 

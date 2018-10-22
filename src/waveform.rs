@@ -4,6 +4,9 @@ extern crate itertools;
 use std::ops::{ Add, Mul, Sub };
 use self::hound::{ WavReader };
 use std::vec::Vec;
+use pcm::read_i16_section;
+use util::FileType;
+
 
 #[derive(Debug, Clone, Copy)]
 pub struct WaveSection {
@@ -66,7 +69,7 @@ pub struct WaveForm {
     pub summary_64k: Vec<WaveSection>,
     pub min: i16,
     pub max: i16,
-    pub channels: u16
+    pub channels: u16,
 }
 
 fn rms(signal: &[i16]) -> f32 {
@@ -90,10 +93,22 @@ impl WaveForm {
         }
     }
 
-    pub fn from_file(path: &str) -> WaveForm {
+    pub fn from_file(path: &str, ft: &FileType, channels: Option<u16>) -> WaveForm {
+         match ft {
+            &FileType::WAV => WaveForm::from_wav_file(path),
+            &FileType::PCM => WaveForm::from_pcm_file(path, channels.unwrap_or(1))
+         }
+    }
+
+    fn from_wav_file(path: &str) -> WaveForm {
         let mut reader = WavReader::open(path).unwrap();
         let samples: Vec<i16> = reader.samples::<i16>().map(|s| s.unwrap()).collect();
         let channels = reader.spec().channels;
+        WaveForm::from_samples(&samples, channels)
+    }
+
+    fn from_pcm_file(path: &str, channels: u16) -> WaveForm {
+        let samples = read_i16_section(path, 0, None);
         WaveForm::from_samples(&samples, channels)
     }
 }
@@ -107,22 +122,22 @@ mod tests {
     fn creates_summary_from_samples() {
         let samples : Vec<i16> = vec!(0, 1, 2);
         let w = WaveForm::from_samples(&samples, 1);
-        //assert_eq!(w.summary_1k, [1.6666666f32]);
-        //assert_eq!(w.summary_8k, [1.6666666f32]);
-        //assert_eq!(w.summary_64k, [1.6666666f32]);
         assert_eq!(w.min, 0);
         assert_eq!(w.max, 2);
     }
 
     #[test]
     fn creates_summary_from_file() {
-        let w = WaveForm::from_file("./resources/duskwolf.wav");
-        //println!("{:?}", w.summary_1k);
-        //println!("{:?}", w.summary_8k);
-        //println!("{:?}", w.summary_64k);
+        let w = WaveForm::from_file("./resources/duskwolf.wav", &FileType::WAV, None);
         assert_eq!(w.summary_1k.len(), 104);
         assert_eq!(w.summary_8k.len(), 13);
         assert_eq!(w.summary_64k.len(), 2);
         assert_eq!(w.channels, 1);
+    }
+
+    #[test]
+    fn creates_summary_from_pcm_file() {
+        let w = WaveForm::from_file("./resources/stereo.pcm", &FileType::PCM, Some(1));
+        assert_eq!(w.summary_1k.len(), 1);
     }
 }
