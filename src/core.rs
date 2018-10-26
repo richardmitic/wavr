@@ -29,19 +29,25 @@ fn split_into_channels(samples: WaveSamplesChannel, n: usize) -> Vec<WaveSamples
     }).collect::<Vec<WaveSamplesChannel>>()
 }
 
+fn linear_interp_lookup(samples: &Vec<WaveSamplesChannel>, channel: usize, position: f64) -> Option<f32> {
+    match position {
+        _ if position < 0. => None,
+        _ if position >= samples[0].len() as f64 => None,
+        p if position as usize == samples[0].len() - 1 => samples[channel][p as usize],
+        _ => {
+            let x = position.fract() as f32;
+            let idx = position as usize;
+            Some((samples[channel][idx + 1].unwrap() * x) + (samples[channel][idx].unwrap() * (1. - x)))
+        }
+    }
+}
+
 fn interp_lookup(samples: Vec<WaveSamplesChannel>, start_frame: usize, full_len: f64, indices: Vec<f64>) -> Vec<WaveSamplesChannel> {
     let mut new_samples: Vec<WaveSamplesChannel> = vec![vec![None; indices.len()]; samples.len()];
 
     for i in 0..indices.len() {
         for channel in 0..samples.len() {
-            new_samples[channel][i] = match indices[i] {
-                ii if ii < 0. => None,
-                ii if ii >= full_len => None,
-                _ => {
-                    let idx = indices[i] as usize - start_frame;
-                    samples[channel][idx]
-                }
-            }
+            new_samples[channel][i] = linear_interp_lookup(&samples, channel, indices[i] - start_frame as f64);
         }
     }
 
@@ -424,6 +430,19 @@ mod tests {
         w.iter().for_each(|row: &Vec<char>| println!("{:?}", row.iter().collect::<String>()));
     }
 
+    #[test]
+    fn interp_sample() {
+        let samples = vec![vec![Some(0f32), Some(1f32)]];
+        assert_close_enough(linear_interp_lookup(&samples, 0, 0.00).unwrap() as f64, 0.00, 0.0000001);
+        assert_close_enough(linear_interp_lookup(&samples, 0, 0.25).unwrap() as f64, 0.25, 0.0000001);
+        assert_close_enough(linear_interp_lookup(&samples, 0, 0.50).unwrap() as f64, 0.50, 0.0000001);
+        assert_close_enough(linear_interp_lookup(&samples, 0, 0.75).unwrap() as f64, 0.75, 0.0000001);
+        assert_close_enough(linear_interp_lookup(&samples, 0, 1.00).unwrap() as f64, 1.00, 0.0000001);
+        assert_close_enough(linear_interp_lookup(&samples, 0, 1.01).unwrap() as f64, 1.00, 0.0000001);
+        assert_eq!(linear_interp_lookup(&samples, 0, -0.01), None);
+        assert_eq!(linear_interp_lookup(&samples, 0, 2.), None);
+    }
+
     #[ignore]
     #[test]
     fn look_for_panics() {
@@ -449,7 +468,7 @@ mod tests {
             let mut c = Core::new();
             c.load("./resources/stereo.wav".to_string(), None);
             let a = c.get_samples_multichannel(&start, &end, w);
-            let b = c.draw_samples_multichannel(a, &w, &h);
+            let _b = c.draw_samples_multichannel(a, &w, &h);
         }
     }
 }
