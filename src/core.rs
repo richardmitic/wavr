@@ -358,8 +358,10 @@ mod tests {
         let mut c = Core::new();
         c.load("./resources/stereo_ramp.wav".to_string(), None);
         let p = c.get_samples_multichannel(&0., &0.5, 4);
-        assert_eq!(p[0], vec![Some(0f32), Some(1f32), Some(2f32), Some(3f32)]);
-        assert_eq!(p[1], vec![Some(8f32), Some(9f32), Some(10f32), Some(11f32)]);
+        assert_close_enough(p[0][0].unwrap() as f64, 0., 0.000001);
+        assert_close_enough(p[0][3].unwrap() as f64, 3., 0.000001);
+        assert_close_enough(p[1][0].unwrap() as f64, 8., 0.000001);
+        assert_close_enough(p[1][3].unwrap() as f64, 11., 0.000001);
     }
 
     #[test]
@@ -376,10 +378,12 @@ mod tests {
         let mut c = Core::new();
         c.load("./resources/stereo_ramp.wav".to_string(), None);
         let p = c.get_samples_multichannel(&0.25, &0.75, 4);
-        assert_eq!(p[0], vec![Some(2f32), Some(3f32), Some(4f32), Some(5f32)]);
-        assert_eq!(p[1], vec![Some(10f32), Some(11f32), Some(12f32), Some(13f32)]);
+        assert_close_enough(p[0][0].unwrap() as f64, 2., 0.000001);
+        assert_close_enough(p[0][3].unwrap() as f64, 5., 0.000001);
+        assert_close_enough(p[1][0].unwrap() as f64, 10., 0.000001);
+        assert_close_enough(p[1][3].unwrap() as f64, 13., 0.000001);
     }
-    
+
     #[test]
     fn gets_stereo_samples_neg1_0() {
         let mut c = Core::new();
@@ -393,10 +397,10 @@ mod tests {
         let mut c = Core::new();
         c.load("./resources/stereo_ramp.wav".to_string(), None);
         let p = c.get_samples_multichannel(&-0.5, &0.5, 8);
-        assert_eq!(p, vec![
-                   vec![None, None, None, None, Some(0f32), Some(1f32), Some(2f32), Some(3f32)], 
-                   vec![None, None, None, None, Some(8f32), Some(9f32), Some(10f32), Some(11f32)]
-        ]);
+        assert_eq!(p[0][0..4], [None, None, None, None]);
+        assert_eq!(p[1][0..4], [None, None, None, None]);
+        let _ = p[0][4..8].into_iter().map(|x| assert!(x.is_some()));
+        let _ = p[1][4..8].into_iter().map(|x| assert!(x.is_some()));
     }
 
     #[test]
@@ -412,8 +416,10 @@ mod tests {
         let mut c = Core::new();
         c.load("./resources/stereo_ramp.wav".to_string(), None);
         let p = c.get_samples_multichannel(&0., &1., 12);
-        assert_eq!(p[0], vec![Some(0.0), Some(0.0), Some(1.0), Some(1.0), Some(2.0), Some(3.0), Some(3.0), Some(4.0), Some(5.0), Some(5.0), Some(6.0), Some(7.0)]);
-        assert_eq!(p[1], vec![Some(8.0), Some(8.0), Some(9.0), Some(9.0), Some(10.0), Some(11.0), Some(11.0), Some(12.0), Some(13.0), Some(13.0), Some(14.0), Some(15.0)]);
+        assert_eq!(p[0][0], Some(0.0));
+        assert_eq!(p[0][11], Some(7.0));
+        assert_eq!(p[1][0], Some(8.0));
+        assert_eq!(p[1][11], Some(15.0));
     }
 
     #[test]
