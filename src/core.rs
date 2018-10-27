@@ -59,7 +59,9 @@ pub struct DisplayChars {
     peak: char,
     zero: char,
     none: char,
-    sample: char
+    sample_low: char,
+    sample_mid: char,
+    sample_high: char
 }
 
 pub struct Core {
@@ -80,7 +82,9 @@ impl Core {
                 peak: '·',
                 zero: '=',
                 none: '-',
-                sample: '•'
+                sample_low: '․',
+                sample_mid: '·',
+                sample_high: '˙'
             }
         }
     }
@@ -218,8 +222,14 @@ impl Core {
                     arr[col][i] = self.chars.none;
                 },
                 Some(x) => {
-                    let col = scale(x as f64, full_scale_min, full_scale_max, this_scale_max, 0.) as usize;
-                    arr[col][i] = self.chars.sample;
+                    let col = scale(x as f64, full_scale_min, full_scale_max, this_scale_max, 0.);
+                    if col.fract() < 0.4 {
+                        arr[col as usize][i] = self.chars.sample_high;
+                    } else if col.fract() > 0.6 {
+                        arr[col as usize][i] = self.chars.sample_low;
+                    } else {
+                        arr[col as usize][i] = self.chars.sample_mid;
+                    }
                 }
             }
         });
