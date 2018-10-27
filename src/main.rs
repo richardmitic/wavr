@@ -31,7 +31,7 @@ impl ViewPoint {
         self.end += range * self.shift_delta;
         (self.begin, self.end)
     }
-    
+
     fn shift_left(&mut self) -> View {
         let range = self.end - self.begin;
         self.begin -= range * self.shift_delta;
@@ -45,7 +45,7 @@ impl ViewPoint {
         self.end -= x;
         (self.begin, self.end)
     }
-    
+
     fn zoom_out(&mut self) -> View {
         let x = (self.end - self.begin) * self.zoom_delta; 
         self.begin -= x;
@@ -79,14 +79,14 @@ fn print_wave(core: &mut Core, width: &usize, height: &usize, view: View, screen
 
 
 fn print_pixels(wave: Vec<Vec<char>>, screen: &mut Write, view: View) {
-    write!(screen, "{}", termion::cursor::Goto(1,1)).unwrap();
+    write!(screen, "{}{}", termion::style::Bold, termion::cursor::Goto(1,1)).unwrap();
     wave.iter().enumerate().for_each(|(i, line)| {
         write!(screen, "{}", termion::cursor::Goto(1, (i + 1) as u16)).unwrap();
         for pixel in line {
             write!(screen, "{}", pixel).unwrap();
         }
     });
-    write!(screen, "{} {}:{}", termion::cursor::Goto(1,1), view.0, view.1).unwrap();
+    write!(screen, "{}{} {}:{}", termion::style::Reset, termion::cursor::Goto(1,1), view.0, view.1).unwrap();
     screen.flush().unwrap();
 }
 
