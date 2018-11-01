@@ -100,7 +100,8 @@ impl Core {
     }
 
     pub fn get_peaks(&mut self, start: &f64, end: &f64, num_peaks: u32) -> WavePeaksChannel {
-        let max_points = self.summary.as_ref().unwrap().summary_64.len() - 1;
+        let best_summary = self.summary.as_ref().unwrap().get_best_summary(start, end, &num_peaks);
+        let max_points = best_summary.len() - 1;
         let skip = (*end - *start) / (num_peaks as f64);
 
         (0..num_peaks).map(|x| {
@@ -112,8 +113,8 @@ impl Core {
                     let interp_index = phase * max_points as f64;
                     let int_index = interp_index as usize;
                     let coeff = interp_index - interp_index.floor();
-                    let x = self.summary.as_ref().unwrap().summary_64[int_index].clone();
-                    let y = self.summary.as_ref().unwrap().summary_64[int_index + 1].clone();
+                    let x = best_summary[int_index].clone();
+                    let y = best_summary[int_index + 1].clone();
                     let diff = y - x;
                     Some(x + (diff * coeff as f32))
                 }
@@ -239,7 +240,7 @@ impl Core {
 
     pub fn should_draw_samples(&mut self, start: &f64, end: &f64, width: &usize) -> bool {
         let range = *end - *start;
-        let num_peaks = self.summary.as_ref().unwrap().summary_64.len() as f64 * range;
+        let num_peaks = self.summary.as_ref().unwrap().get_best_summary(start, end, &(*width as u32)).len() as f64 * range;
         num_peaks < (width / 2) as f64
     }
 

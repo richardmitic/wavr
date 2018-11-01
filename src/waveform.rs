@@ -63,13 +63,14 @@ impl Mul<f32> for WaveSection {
 
 
 pub struct WaveForm {
-    pub summary_64: Vec<WaveSection>,
+    pub summary_256: Vec<WaveSection>,
     pub summary_1k: Vec<WaveSection>,
     pub summary_8k: Vec<WaveSection>,
-    pub summary_64k: Vec<WaveSection>,
+    pub summary_256k: Vec<WaveSection>,
     pub min: i16,
     pub max: i16,
     pub channels: u16,
+    pub length: usize
 }
 
 fn rms(signal: &[i16]) -> f32 {
@@ -83,13 +84,14 @@ fn rms(signal: &[i16]) -> f32 {
 impl WaveForm {
     pub fn from_samples(samples: &Vec<i16>, channels: u16) -> WaveForm {
         WaveForm {
-            summary_64: samples.chunks(64).map(|chunk| WaveSection::from_signal(chunk)).collect(),
+            summary_256: samples.chunks(64).map(|chunk| WaveSection::from_signal(chunk)).collect(),
             summary_1k: samples.chunks(1024).map(|chunk| WaveSection::from_signal(chunk)).collect(),
             summary_8k: samples.chunks(8196).map(|chunk| WaveSection::from_signal(chunk)).collect(),
-            summary_64k: samples.chunks(65536).map(|chunk| WaveSection::from_signal(chunk)).collect(),
+            summary_256k: samples.chunks(65536).map(|chunk| WaveSection::from_signal(chunk)).collect(),
             min : samples.iter().cloned().min().unwrap(),
             max : samples.iter().cloned().max().unwrap(),
-            channels : channels
+            channels : channels,
+            length: samples.len()
         }
     }
 
@@ -111,6 +113,33 @@ impl WaveForm {
         let samples = read_i16_section(path, 0, None);
         WaveForm::from_samples(&samples, channels)
     }
+
+    pub fn get_best_summary(&self, start: &f64, end: &f64, num_peaks: &u32) -> &Vec<WaveSection> {
+        let samples_per_bin = ((*end - *start) * self.length as f64) / (*num_peaks as f64);
+        let length_differences = vec![
+            (256f64 - samples_per_bin).abs(), 
+            (1024f64 - samples_per_bin).abs(), 
+            (8196f64 - samples_per_bin).abs(), 
+            (65536f64 - samples_per_bin).abs()
+        ];
+
+        let mut min_index = 0;
+        let mut min = length_differences[min_index];
+
+        for (i, v) in length_differences.iter().enumerate() {
+            if min > *v {
+                min_index = i;
+                min = *v;
+            }
+        };
+
+        match min_index {
+            3 => &self.summary_256k,
+            2 => &self.summary_8k,
+            1 => &self.summary_1k,
+            _ => &self.summary_256
+        }
+    }
 }
 
 
@@ -131,7 +160,7 @@ mod tests {
         let w = WaveForm::from_file("./resources/duskwolf.wav", &FileType::WAV, None);
         assert_eq!(w.summary_1k.len(), 104);
         assert_eq!(w.summary_8k.len(), 13);
-        assert_eq!(w.summary_64k.len(), 2);
+        assert_eq!(w.summary_256k.len(), 2);
         assert_eq!(w.channels, 1);
     }
 
@@ -139,5 +168,14 @@ mod tests {
     fn creates_summary_from_pcm_file() {
         let w = WaveForm::from_file("./resources/stereo.pcm", &FileType::PCM, Some(1));
         assert_eq!(w.summary_1k.len(), 1);
+    }
+    
+    #[test]
+    fn chooses_correct_summary() {
+        let w = WaveForm::from_file("./resources/duskwolf.wav", &FileType::WAV, None);
+        let x1 = w.get_best_summary(&0., &1., &100);
+        let x2 = w.get_best_summary(&0.5, &0.6, &100);
+        assert_eq!(x1.len(), w.summary_1k.len());
+        assert_eq!(x2.len(), w.summary_256.len());
     }
 }
