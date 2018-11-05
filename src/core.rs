@@ -128,14 +128,14 @@ impl Core {
             let full_scale_max = (std::i16::MAX) as f64;
             let full_scale_min = (std::i16::MIN) as f64;
             let this_scale_max = (*height - 1) as f64;
-            let centre_row = scale(0., full_scale_min, full_scale_max, this_scale_max, 0.) as usize;
+            let centre_row = scale(0., full_scale_min, full_scale_max, this_scale_max, 0.) as usize + (*height % 2);
             match *sect {
                 Some(ws) => {
                     let max_scaled = scale(ws.max as f64, full_scale_min, full_scale_max, this_scale_max, 0.).max(0f64) + 0.5;
                     let min_scaled = scale(ws.min as f64, full_scale_min, full_scale_max, this_scale_max, 0.).min(this_scale_max) + 0.5;
                     let max_rms_scaled = scale(ws.rms as f64, full_scale_min, full_scale_max, this_scale_max, 0.).max(0f64) + 0.5;
                     let min_rms_scaled = scale(-(ws.rms as f64), full_scale_min, full_scale_max, this_scale_max, 0.).min(this_scale_max) + 0.5;
-                    //println!("{} {} {}", max_scaled, min_scaled, mid_point);
+                    //println!("{} {} {} {}", max_scaled, min_scaled, max_rms_scaled, min_rms_scaled);
                     let max_idx = max_scaled as usize;
                     let min_idx = min_scaled as usize;
                     let max_rms_idx = max_rms_scaled as usize;
