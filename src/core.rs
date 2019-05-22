@@ -99,30 +99,32 @@ impl Core {
         self.summary.as_ref().unwrap().channels as usize
     }
 
-    pub fn get_peaks(&mut self, start: &f64, end: &f64, num_peaks: u32) -> WavePeaksChannel {
+    pub fn get_peaks(&mut self, start: &f64, end: &f64, num_peaks: u32) -> Vec<WavePeaksChannel> {
         let best_summary = self.summary.as_ref().unwrap().get_best_summary(start, end, &num_peaks);
-        let max_points = best_summary.len() - 1;
+        let max_points = best_summary[0].len() - 1;
         let skip = (*end - *start) / (num_peaks as f64);
 
-        (0..num_peaks).map(|x| {
-            let phase = *start + (x as f64 * skip);
-            match phase {
-                p if p < 0f64 => None,
-                p if p >= 1f64 => None,
-                _ => {
-                    let interp_index = phase * max_points as f64;
-                    let int_index = interp_index as usize;
-                    let coeff = interp_index - interp_index.floor();
-                    let x = best_summary[int_index].clone();
-                    let y = best_summary[int_index + 1].clone();
-                    let diff = y - x;
-                    Some(x + (diff * coeff as f32))
+        best_summary.iter().map(|summary_channel| {
+            (0..num_peaks).map(|x| {
+                let phase = *start + (x as f64 * skip);
+                match phase {
+                    p if p < 0f64 => None,
+                    p if p >= 1f64 => None,
+                    _ => {
+                        let interp_index = phase * max_points as f64;
+                        let int_index = interp_index as usize;
+                        let coeff = interp_index - interp_index.floor();
+                        let x = summary_channel[int_index].clone();
+                        let y = summary_channel[int_index + 1].clone();
+                        let diff = y - x;
+                        Some(x + (diff * coeff as f32))
+                    }
                 }
-            }
-        }).collect::<WavePeaksChannel>()
+            }).collect::<WavePeaksChannel>()
+        }).collect()
     }
 
-    pub fn draw_wave(&mut self, peaks: Vec<Option<WaveSection>>, width: &usize, height: &usize) -> Vec<Vec<char>> {
+    pub fn draw_peaks(&mut self, peaks: WavePeaksChannel, width: &usize, height: &usize) -> Vec<Vec<char>> {
         let mut arr = vec![vec![' '; *width]; *height];
         peaks.iter().enumerate().for_each(|(i, sect)| {
             let full_scale_max = (std::i16::MAX) as f64;
@@ -158,6 +160,13 @@ impl Core {
         });
 
         arr
+    }
+
+    pub fn draw_peaks_multichannel(&mut self, peaks: Vec<WavePeaksChannel>, width: &usize, height: &usize) -> Vec<Vec<char>> {
+        let heights = self.channel_heights(height);
+        peaks.into_iter().zip(heights.into_iter()).map(|(chan, h)| {
+            self.draw_peaks(chan, width, &h)
+        }).flatten().collect()
     }
 
     pub fn get_samples_multichannel(&mut self, start: &f64, end: &f64, num_bins: usize) -> Vec<WaveSamplesChannel> {
@@ -240,19 +249,22 @@ impl Core {
 
     pub fn should_draw_samples(&mut self, start: &f64, end: &f64, width: &usize) -> bool {
         let range = *end - *start;
-        let num_peaks = self.summary.as_ref().unwrap().get_best_summary(start, end, &(*width as u32)).len() as f64 * range;
+        let num_peaks = self.summary.as_ref().unwrap().get_best_summary(start, end, &(*width as u32))[0].len() as f64 * range;
         num_peaks < (width / 2) as f64
     }
 
     pub fn draw_samples_multichannel(&mut self, samples: Vec<WaveSamplesChannel>, width: &usize, height: &usize) -> Vec<Vec<char>> {
-        let float_height = *height as f32 / self.channels() as f32;
-        let mut heights = vec![0; self.channels()];
-        for n in 0..self.channels() {
-            heights[n] = (float_height * (n + 1) as f32) as usize - (float_height * n as f32) as usize;
-        }
+        let heights = self.channel_heights(height);
         samples.into_iter().zip(heights).flat_map(|(chan, this_height)| {
             self.draw_samples(chan.to_vec(), width, &this_height).into_iter()
         }).collect::<Vec<Vec<char>>>()
+    }
+
+    fn channel_heights(&mut self, full_height: &usize) -> Vec<usize> {
+        let float_height = *full_height as f32 / self.channels() as f32;
+        (0..self.channels()).map(|n| {
+            (float_height * (n + 1) as f32) as usize - (float_height * n as f32) as usize
+        }).collect()
     }
 }
 
@@ -265,15 +277,25 @@ mod tests {
         let mut c = Core::new();
         c.load("./resources/duskwolf.wav".to_string(), None);
         let p = c.get_peaks(&0., &1., 20);
-        assert_eq!(p.len(), 20);
+        assert_eq!(p.len(), 1);
+        assert_eq!(p[0].len(), 20);
     }
 
     #[test]
-    fn draws_wave() {
+    fn draws_peaks() {
         let mut c = Core::new();
         c.load("./resources/duskwolf.wav".to_string(), None);
         let p = c.get_peaks(&0., &1., 120);
-        let w = c.draw_wave(p, &120, &30);
+        let w = c.draw_peaks_multichannel(p, &120, &30);
+        w.iter().for_each(|row: &Vec<char>| println!("{:?}", row.iter().collect::<String>()));
+    }
+
+    #[test]
+    fn draws_peaks_stereo() {
+        let mut c = Core::new();
+        c.load("./resources/oktava.wav".to_string(), None);
+        let p = c.get_peaks(&0., &1., 120);
+        let w = c.draw_peaks_multichannel(p, &120, &30);
         w.iter().for_each(|row: &Vec<char>| println!("{:?}", row.iter().collect::<String>()));
     }
 
@@ -292,9 +314,9 @@ mod tests {
         let mut c = Core::new();
         c.load("./resources/duskwolf.wav".to_string(), None);
         let p = c.get_peaks(&-1., &0., 5);
-        assert_eq!(p.iter().fold(true, |a, b| a && b.is_none()), true);
+        assert_eq!(p[0].iter().fold(true, |a, b| a && b.is_none()), true);
         let p = c.get_peaks(&1., &2., 5);
-        assert_eq!(p.iter().fold(true, |a, b| a && b.is_none()), true);
+        assert_eq!(p[0].iter().fold(true, |a, b| a && b.is_none()), true);
     }
 
     fn assert_close_enough(x: f64, y: f64, epsilon: f64) {
@@ -458,6 +480,20 @@ mod tests {
         assert_close_enough(linear_interp_lookup(&samples, 0, 1.01).unwrap() as f64, 1.00, 0.0000001);
         assert_eq!(linear_interp_lookup(&samples, 0, -0.01), None);
         assert_eq!(linear_interp_lookup(&samples, 0, 2.), None);
+    }
+
+    #[test]
+    fn chooses_samples() {
+        let mut c = Core::new();
+        c.load("./resources/stereo.wav".to_string(), None);
+        assert_eq!(c.should_draw_samples(&0., &1., &40), true);
+    }
+
+    #[test]
+    fn chooses_peaks() {
+        let mut c = Core::new();
+        c.load("./resources/stereo.wav".to_string(), None);
+        assert_eq!(c.should_draw_samples(&0., &1., &20), false);
     }
 
     #[ignore]

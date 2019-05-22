@@ -73,9 +73,12 @@ fn print_wave(core: &mut Core, width: &usize, height: &usize, view: View, screen
         else { print_pixels(wave, screen, view) }
     } else {
         let peaks = core.get_peaks(&(view.0 as f64), &(view.1 as f64), *width as u32);
-        let wave = core.draw_wave(peaks, &width, &height);
-        if stdout { print_pixels_to_stdout(wave, screen, view) }
-        else { print_pixels(wave, screen, view) }
+        let wave = core.draw_peaks_multichannel(peaks, &width, &height);
+        if stdout { 
+            print_pixels_to_stdout(wave, screen, view);
+        } else {
+            print_pixels(wave, screen, view)
+        }
     }
 }
 
