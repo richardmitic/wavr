@@ -16,14 +16,6 @@ pub struct WaveSection {
 }
 
 impl WaveSection {
-    pub fn from_signal(signal: &[i16]) -> WaveSection {
-        WaveSection {
-            min: *signal.iter().min().unwrap() as f32,
-            max: *signal.iter().max().unwrap() as f32,
-            rms: rms(signal, 0, 1)
-        }
-    }
-
     pub fn from_signal_multichannel(signal: &[i16], channels: u16) -> Vec<WaveSection> {
         (0..channels).map(|n| {
             WaveSection {

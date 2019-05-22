@@ -6,10 +6,6 @@ pub enum FileType {
     PCM
 }
 
-pub fn floor_n(x: usize, n: usize) -> usize {
-    (x / n) * n
-}
-
 pub fn get_extension_from_filename(filename: &str) -> Option<&str> {
     Path::new(filename)
         .extension()

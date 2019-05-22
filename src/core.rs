@@ -3,11 +3,12 @@ extern crate rand;
 
 use std;
 use std::string::String;
-use self::rand::{ Rng };
 use waveform::{ WaveForm, WaveSection };
 use self::hound::WavReader;
 use util::{ FileType, get_type };
 use pcm::{ WaveSamplesChannel, get_duration, read_wavesection };
+#[allow(unused_imports)]
+use self::rand::{ Rng };
 
 type WavePeaksChannel = Vec<Option<WaveSection>>;
 
@@ -42,7 +43,7 @@ fn linear_interp_lookup(samples: &Vec<WaveSamplesChannel>, channel: usize, posit
     }
 }
 
-fn interp_lookup(samples: Vec<WaveSamplesChannel>, start_frame: usize, full_len: f64, indices: Vec<f64>) -> Vec<WaveSamplesChannel> {
+fn interp_lookup(samples: Vec<WaveSamplesChannel>, start_frame: usize, indices: Vec<f64>) -> Vec<WaveSamplesChannel> {
     let mut new_samples: Vec<WaveSamplesChannel> = vec![vec![None; indices.len()]; samples.len()];
 
     for i in 0..indices.len() {
@@ -191,7 +192,7 @@ impl Core {
 
         let section = read_wavesection(&self.file, start_frame * &channels, Some(num_samples));
         let multichannel_samples = split_into_channels(section, self.channels());
-        interp_lookup(multichannel_samples, start_frame, full_len, interp_indices)
+        interp_lookup(multichannel_samples, start_frame, interp_indices)
     } 
 
     pub fn get_samples_multichannel_wav(&mut self, start: &f64, end: &f64, num_bins: usize) -> Vec<WaveSamplesChannel> {
@@ -217,7 +218,7 @@ impl Core {
         assert_eq!(num_samples, section.len());
 
         let multichannel_samples = split_into_channels(section, self.channels());
-        interp_lookup(multichannel_samples, start_frame, full_len, interp_indices)
+        interp_lookup(multichannel_samples, start_frame, interp_indices)
     }
 
     pub fn draw_samples(&mut self, samples: WaveSamplesChannel, width: &usize, height: &usize) -> Vec<Vec<char>> {
