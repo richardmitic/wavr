@@ -144,7 +144,7 @@ impl Core {
                     let max_rms_idx = max_rms_scaled as usize;
                     let min_rms_idx = min_rms_scaled as usize;
                     match min_idx == max_idx {
-                        true => arr[max_idx][i] = self.chars.zero,
+                        true => arr[centre_row][i] = self.chars.zero,
                         false => {
                             for j in max_idx..min_idx {
                                 arr[j][i] = self.chars.peak;
