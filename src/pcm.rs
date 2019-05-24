@@ -1,14 +1,13 @@
 extern crate byteorder;
 
+use self::byteorder::{LittleEndian, ReadBytesExt};
 use std::cmp;
-use std::io::SeekFrom;
+use std::fs::{metadata, File};
 use std::io::prelude::*;
-use std::fs::{ File, metadata };
-use self::byteorder::{ReadBytesExt, LittleEndian};
+use std::io::SeekFrom;
 use std::mem::size_of;
 
 pub type WaveSamplesChannel = Vec<Option<f32>>;
-
 
 pub fn get_duration(path: &str, channels: &usize) -> usize {
     metadata(path).unwrap().len() as usize / size_of::<i16>() / channels
@@ -28,8 +27,15 @@ pub fn read_i16_section(path: &str, offset_samples: usize, num_samples: Option<u
     buffer.to_vec()
 }
 
-pub fn read_wavesection(path: &str, offset_samples: usize, num_samples: Option<usize>) -> WaveSamplesChannel {
-    read_i16_section(path, offset_samples, num_samples).into_iter().map(|s| Some(s as f32)).collect::<WaveSamplesChannel>()
+pub fn read_wavesection(
+    path: &str,
+    offset_samples: usize,
+    num_samples: Option<usize>,
+) -> WaveSamplesChannel {
+    read_i16_section(path, offset_samples, num_samples)
+        .into_iter()
+        .map(|s| Some(s as f32))
+        .collect::<WaveSamplesChannel>()
 }
 
 #[cfg(test)]
@@ -45,13 +51,15 @@ mod tests {
     #[test]
     fn read_pcm_section() {
         let samples = read_i16_section("./resources/stereo_ramp.pcm", 8, Some(8));
-        assert_eq!(samples, vec![4i16, 12i16, 5i16, 13i16, 6i16, 14i16, 7i16, 15i16]);
+        assert_eq!(
+            samples,
+            vec![4i16, 12i16, 5i16, 13i16, 6i16, 14i16, 7i16, 15i16]
+        );
     }
-    
+
     #[test]
     fn read_too_much() {
         let samples = read_i16_section("./resources/stereo_ramp.pcm", 0, Some(17));
         assert_eq!(samples.len(), 16);
     }
 }
-

@@ -3,15 +3,15 @@ extern crate termion;
 
 mod core;
 mod pcm;
-mod waveform;
 mod util;
+mod waveform;
 
 use clap::App;
 use core::Core;
-use std::io::{Write, stdin, stdout};
-use termion::event::{Key};
+use std::io::{stdin, stdout, Write};
+use termion::event::Key;
 use termion::input::TermRead;
-use termion::raw::{IntoRawMode};
+use termion::raw::IntoRawMode;
 use termion::terminal_size;
 
 /// A view into a wave. Beginning and end as numbers between 0. and 1.
@@ -21,7 +21,7 @@ struct ViewPoint {
     begin: f64,
     end: f64,
     shift_delta: f64,
-    zoom_delta: f64
+    zoom_delta: f64,
 }
 
 impl ViewPoint {
@@ -40,14 +40,14 @@ impl ViewPoint {
     }
 
     fn zoom_in(&mut self) -> View {
-        let x = (self.end - self.begin) * self.zoom_delta; 
+        let x = (self.end - self.begin) * self.zoom_delta;
         self.begin += x;
         self.end -= x;
         (self.begin, self.end)
     }
 
     fn zoom_out(&mut self) -> View {
-        let x = (self.end - self.begin) * self.zoom_delta; 
+        let x = (self.end - self.begin) * self.zoom_delta;
         self.begin -= x;
         self.end += x;
         (self.begin, self.end)
@@ -64,24 +64,33 @@ impl ViewPoint {
     }
 }
 
-
-fn print_wave(core: &mut Core, width: &usize, height: &usize, view: View, screen: &mut Write, stdout: bool) {
+fn print_wave(
+    core: &mut Core,
+    width: &usize,
+    height: &usize,
+    view: View,
+    screen: &mut Write,
+    stdout: bool,
+) {
     if core.should_draw_samples(&(view.0 as f64), &(view.1 as f64), width) {
-        let samples = core.get_samples_multichannel(&(view.0 as f64), &(view.1 as f64), *width as usize);
+        let samples =
+            core.get_samples_multichannel(&(view.0 as f64), &(view.1 as f64), *width as usize);
         let wave = core.draw_samples_multichannel(samples, &width, &height);
-        if stdout { print_pixels_to_stdout(wave, screen) }
-        else { print_pixels(wave, screen, view) }
+        if stdout {
+            print_pixels_to_stdout(wave, screen)
+        } else {
+            print_pixels(wave, screen, view)
+        }
     } else {
         let peaks = core.get_peaks(&(view.0 as f64), &(view.1 as f64), *width as u32);
         let wave = core.draw_peaks_multichannel(peaks, &width, &height);
-        if stdout { 
+        if stdout {
             print_pixels_to_stdout(wave, screen);
         } else {
             print_pixels(wave, screen, view)
         }
     }
 }
-
 
 fn print_pixels_to_stdout(wave: Vec<Vec<char>>, screen: &mut Write) {
     wave.iter().for_each(|line| {
@@ -94,17 +103,30 @@ fn print_pixels_to_stdout(wave: Vec<Vec<char>>, screen: &mut Write) {
 }
 
 fn print_pixels(wave: Vec<Vec<char>>, screen: &mut Write, view: View) {
-    write!(screen, "{}{}", termion::style::Bold, termion::cursor::Goto(1,1)).unwrap();
+    write!(
+        screen,
+        "{}{}",
+        termion::style::Bold,
+        termion::cursor::Goto(1, 1)
+    )
+    .unwrap();
     wave.iter().enumerate().for_each(|(i, line)| {
         write!(screen, "{}", termion::cursor::Goto(1, (i + 1) as u16)).unwrap();
         for pixel in line {
             write!(screen, "{}", pixel).unwrap();
         }
     });
-    write!(screen, "{}{}{:.6}:{:.6}", termion::style::Reset, termion::cursor::Goto(2,1), view.0, view.1).unwrap();
+    write!(
+        screen,
+        "{}{}{:.6}:{:.6}",
+        termion::style::Reset,
+        termion::cursor::Goto(2, 1),
+        view.0,
+        view.1
+    )
+    .unwrap();
     screen.flush().unwrap();
 }
-
 
 fn setup_screen(screen: &mut Write) {
     write!(screen, "{}{}", termion::clear::All, termion::cursor::Hide).unwrap();
@@ -112,55 +134,81 @@ fn setup_screen(screen: &mut Write) {
 }
 
 fn reset_screen(screen: &mut Write) {
-    write!(screen, "{}{}{}", termion::clear::All, termion::cursor::Show, termion::cursor::Goto(1,1)).unwrap();
+    write!(
+        screen,
+        "{}{}{}",
+        termion::clear::All,
+        termion::cursor::Show,
+        termion::cursor::Goto(1, 1)
+    )
+    .unwrap();
     screen.flush().unwrap()
 }
 
 fn main() {
-
     // arguments
     let matches = App::new("WavR")
         .version("0.1")
         .about("view wav files in the terminal")
-        .arg(clap::Arg::with_name("INPUT")
-            .help("Sets the input file to use")
-            .required(true)
-            .index(1))
-        .arg(clap::Arg::with_name("v")
-            .short("v")
-            .help("Sets the level of verbosity"))
-        .arg(clap::Arg::with_name("begin")
-            .short("b")
-            .default_value("0.")
-            .help("Begining point within the wave"))
-        .arg(clap::Arg::with_name("end")
-            .short("e")
-            .default_value("1.")
-            .help("End point within the wave"))
-        .arg(clap::Arg::with_name("width")
-            .short("w")
-            .default_value("")
-            .help("Width of drawing"))
-        .arg(clap::Arg::with_name("height")
-            .short("h")
-            .default_value("")
-            .help("Height of drawing"))
-        .arg(clap::Arg::with_name("shift")
-            .short("s")
-            .default_value("0.1")
-            .help("Amount to shift left and right per key press"))
-        .arg(clap::Arg::with_name("zoom")
-            .short("z")
-            .default_value("0.1")
-            .help("Amount to zoom in and out per key press"))
-        .arg(clap::Arg::with_name("channels")
-             .short("c")
-             .default_value("1")
-             .help("Number of channels whean reading from a raw PCM file"))
-        .arg(clap::Arg::with_name("print")
-            .short("p")
-            .takes_value(false)
-            .help("Print single view and exit"))
+        .arg(
+            clap::Arg::with_name("INPUT")
+                .help("Sets the input file to use")
+                .required(true)
+                .index(1),
+        )
+        .arg(
+            clap::Arg::with_name("v")
+                .short("v")
+                .help("Sets the level of verbosity"),
+        )
+        .arg(
+            clap::Arg::with_name("begin")
+                .short("b")
+                .default_value("0.")
+                .help("Begining point within the wave"),
+        )
+        .arg(
+            clap::Arg::with_name("end")
+                .short("e")
+                .default_value("1.")
+                .help("End point within the wave"),
+        )
+        .arg(
+            clap::Arg::with_name("width")
+                .short("w")
+                .default_value("")
+                .help("Width of drawing"),
+        )
+        .arg(
+            clap::Arg::with_name("height")
+                .short("h")
+                .default_value("")
+                .help("Height of drawing"),
+        )
+        .arg(
+            clap::Arg::with_name("shift")
+                .short("s")
+                .default_value("0.1")
+                .help("Amount to shift left and right per key press"),
+        )
+        .arg(
+            clap::Arg::with_name("zoom")
+                .short("z")
+                .default_value("0.1")
+                .help("Amount to zoom in and out per key press"),
+        )
+        .arg(
+            clap::Arg::with_name("channels")
+                .short("c")
+                .default_value("1")
+                .help("Number of channels whean reading from a raw PCM file"),
+        )
+        .arg(
+            clap::Arg::with_name("print")
+                .short("p")
+                .takes_value(false)
+                .help("Print single view and exit"),
+        )
         .get_matches();
 
     let size = terminal_size().unwrap();
@@ -168,14 +216,18 @@ fn main() {
     let filepath = matches.value_of("INPUT");
     let channels = matches.value_of("channels").unwrap().parse().unwrap_or(1) as u16;
     let width = matches.value_of("width").unwrap().parse().unwrap_or(size.0) as usize;
-    let height = matches.value_of("height").unwrap().parse().unwrap_or(size.1) as usize;
+    let height = matches
+        .value_of("height")
+        .unwrap()
+        .parse()
+        .unwrap_or(size.1) as usize;
     let just_print = matches.occurrences_of("print") > 0;
-    
+
     let mut view_point = ViewPoint {
         begin: matches.value_of("begin").unwrap().parse().unwrap(),
         end: matches.value_of("end").unwrap().parse().unwrap(),
         shift_delta: matches.value_of("shift").unwrap().parse().unwrap(),
-        zoom_delta: matches.value_of("zoom").unwrap().parse().unwrap()
+        zoom_delta: matches.value_of("zoom").unwrap().parse().unwrap(),
     };
 
     println!("{:?}", filepath);
@@ -187,7 +239,7 @@ fn main() {
 
     if just_print {
         print_wave(&mut c, &width, &height, view, &mut stdout(), true);
-        return
+        return;
     }
 
     let stdin = stdin();
@@ -203,23 +255,23 @@ fn main() {
             Key::Char('r') => {
                 let view = view_point.reset();
                 print_wave(&mut c, &width, &height, view, &mut out, false);
-            },
+            }
             Key::Left => {
                 let view = view_point.shift_left();
                 print_wave(&mut c, &width, &height, view, &mut out, false);
-            },
+            }
             Key::Right => {
                 let view = view_point.shift_right();
                 print_wave(&mut c, &width, &height, view, &mut out, false);
-            },
+            }
             Key::Up => {
                 let view = view_point.zoom_in();
                 print_wave(&mut c, &width, &height, view, &mut out, false);
-            },
+            }
             Key::Down => {
                 let view = view_point.zoom_out();
                 print_wave(&mut c, &width, &height, view, &mut out, false);
-            },
+            }
             _ => {}
         }
     }

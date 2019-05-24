@@ -1,29 +1,38 @@
 extern crate hound;
 extern crate itertools;
 
-use std::ops::{ Add, Mul, Sub };
-use self::hound::{ WavReader };
-use std::vec::Vec;
+use self::hound::WavReader;
 use pcm::read_i16_section;
+use std::ops::{Add, Mul, Sub};
+use std::vec::Vec;
 use util::FileType;
-
 
 #[derive(Debug, Clone, Copy)]
 pub struct WaveSection {
     pub min: f32,
     pub max: f32,
-    pub rms: f32
+    pub rms: f32,
 }
 
 impl WaveSection {
     pub fn from_signal_multichannel(signal: &[i16], channels: u16) -> Vec<WaveSection> {
-        (0..channels).map(|n| {
-            WaveSection {
-                min: *signal.iter().skip(n as usize).step_by(channels as usize).min().unwrap() as f32,
-                max: *signal.iter().skip(n as usize).step_by(channels as usize).max().unwrap() as f32,
-                rms: rms(signal, n as usize, channels as usize)
-            }
-        }).collect()
+        (0..channels)
+            .map(|n| WaveSection {
+                min: *signal
+                    .iter()
+                    .skip(n as usize)
+                    .step_by(channels as usize)
+                    .min()
+                    .unwrap() as f32,
+                max: *signal
+                    .iter()
+                    .skip(n as usize)
+                    .step_by(channels as usize)
+                    .max()
+                    .unwrap() as f32,
+                rms: rms(signal, n as usize, channels as usize),
+            })
+            .collect()
     }
 }
 
@@ -34,7 +43,7 @@ impl Sub for WaveSection {
         WaveSection {
             min: self.min - other.min,
             max: self.max - other.max,
-            rms: self.rms - other.rms
+            rms: self.rms - other.rms,
         }
     }
 }
@@ -46,7 +55,7 @@ impl Add for WaveSection {
         WaveSection {
             min: self.min + other.min,
             max: self.max + other.max,
-            rms: self.rms + other.rms
+            rms: self.rms + other.rms,
         }
     }
 }
@@ -58,11 +67,10 @@ impl Mul<f32> for WaveSection {
         WaveSection {
             min: self.min * rhs,
             max: self.max * rhs,
-            rms: self.rms * rhs
+            rms: self.rms * rhs,
         }
     }
 }
-
 
 pub struct WaveForm {
     pub summary_256: Vec<Vec<WaveSection>>,
@@ -72,19 +80,30 @@ pub struct WaveForm {
     pub min: i16,
     pub max: i16,
     pub channels: u16,
-    pub length: usize
+    pub length: usize,
 }
 
 fn rms(signal: &[i16], offset: usize, step: usize) -> f32 {
     let len = signal.len() as f32;
-    (signal.iter().skip(offset).step_by(step).map(|x| {
-        let f = *x as f32;
-        f * f
-    }).sum::<f32>() / len).sqrt()
+    (signal
+        .iter()
+        .skip(offset)
+        .step_by(step)
+        .map(|x| {
+            let f = *x as f32;
+            f * f
+        })
+        .sum::<f32>()
+        / len)
+        .sqrt()
 }
 
 impl WaveForm {
-    pub fn make_summary(samples: &Vec<i16>, chunk_size: usize, channels: u16) -> Vec<Vec<WaveSection>> {
+    pub fn make_summary(
+        samples: &Vec<i16>,
+        chunk_size: usize,
+        channels: u16,
+    ) -> Vec<Vec<WaveSection>> {
         let mut summary = vec![vec![]; channels as usize];
         for chunk in samples.chunks(chunk_size) {
             let ws = WaveSection::from_signal_multichannel(chunk, channels);
@@ -101,18 +120,18 @@ impl WaveForm {
             summary_1k: WaveForm::make_summary(samples, 1024, channels),
             summary_8k: WaveForm::make_summary(samples, 8196, channels),
             summary_256k: WaveForm::make_summary(samples, 65536, channels),
-            min : samples.iter().cloned().min().unwrap(),
-            max : samples.iter().cloned().max().unwrap(),
-            channels : channels,
-            length: samples.len()
+            min: samples.iter().cloned().min().unwrap(),
+            max: samples.iter().cloned().max().unwrap(),
+            channels: channels,
+            length: samples.len(),
         }
     }
 
     pub fn from_file(path: &str, ft: &FileType, channels: Option<u16>) -> WaveForm {
-         match ft {
+        match ft {
             &FileType::WAV => WaveForm::from_wav_file(path),
-            &FileType::PCM => WaveForm::from_pcm_file(path, channels.unwrap_or(1))
-         }
+            &FileType::PCM => WaveForm::from_pcm_file(path, channels.unwrap_or(1)),
+        }
     }
 
     fn from_wav_file(path: &str) -> WaveForm {
@@ -127,13 +146,18 @@ impl WaveForm {
         WaveForm::from_samples(&samples, channels)
     }
 
-    pub fn get_best_summary(&self, start: &f64, end: &f64, num_peaks: &u32) -> &Vec<Vec<WaveSection>> {
+    pub fn get_best_summary(
+        &self,
+        start: &f64,
+        end: &f64,
+        num_peaks: &u32,
+    ) -> &Vec<Vec<WaveSection>> {
         let samples_per_bin = ((*end - *start) * self.length as f64) / (*num_peaks as f64);
         let length_differences = vec![
-            (256f64 - samples_per_bin).abs(), 
-            (1024f64 - samples_per_bin).abs(), 
-            (8196f64 - samples_per_bin).abs(), 
-            (65536f64 - samples_per_bin).abs()
+            (256f64 - samples_per_bin).abs(),
+            (1024f64 - samples_per_bin).abs(),
+            (8196f64 - samples_per_bin).abs(),
+            (65536f64 - samples_per_bin).abs(),
         ];
 
         let mut min_index = 0;
@@ -144,17 +168,16 @@ impl WaveForm {
                 min_index = i;
                 min = *v;
             }
-        };
+        }
 
         match min_index {
             3 => &self.summary_256k,
             2 => &self.summary_8k,
             1 => &self.summary_1k,
-            _ => &self.summary_256
+            _ => &self.summary_256,
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -162,7 +185,7 @@ mod tests {
 
     #[test]
     fn creates_summary_from_samples() {
-        let samples : Vec<i16> = vec!(0, 1, 2);
+        let samples: Vec<i16> = vec![0, 1, 2];
         let w = WaveForm::from_samples(&samples, 1);
         assert_eq!(w.min, 0);
         assert_eq!(w.max, 2);
@@ -186,7 +209,7 @@ mod tests {
         assert_eq!(w.summary_1k.len(), 1);
         assert_eq!(w.summary_1k[0].len(), 1);
     }
-    
+
     #[test]
     fn chooses_correct_summary() {
         let w = WaveForm::from_file("./resources/duskwolf.wav", &FileType::WAV, None);
@@ -198,7 +221,7 @@ mod tests {
 
     #[test]
     fn wave_section_stereo() {
-        let samples : Vec<i16> = vec!(0, 1, 2, 3, 4, 5, 6, 7);
+        let samples: Vec<i16> = vec![0, 1, 2, 3, 4, 5, 6, 7];
         let ws = WaveSection::from_signal_multichannel(&samples, 2);
         assert_eq!(ws.len(), 2);
         assert_eq!(ws[0].min, 0.);
