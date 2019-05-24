@@ -9,7 +9,7 @@ View audio files in the terminal.
 ## Usage
 Display the help message
 ```
-$ wavr --help
+wavr --help
 ```
 
 ### Controls
