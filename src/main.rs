@@ -69,13 +69,13 @@ fn print_wave(core: &mut Core, width: &usize, height: &usize, view: View, screen
     if core.should_draw_samples(&(view.0 as f64), &(view.1 as f64), width) {
         let samples = core.get_samples_multichannel(&(view.0 as f64), &(view.1 as f64), *width as usize);
         let wave = core.draw_samples_multichannel(samples, &width, &height);
-        if stdout { print_pixels_to_stdout(wave, screen, view) }
+        if stdout { print_pixels_to_stdout(wave, screen) }
         else { print_pixels(wave, screen, view) }
     } else {
         let peaks = core.get_peaks(&(view.0 as f64), &(view.1 as f64), *width as u32);
         let wave = core.draw_peaks_multichannel(peaks, &width, &height);
         if stdout { 
-            print_pixels_to_stdout(wave, screen, view);
+            print_pixels_to_stdout(wave, screen);
         } else {
             print_pixels(wave, screen, view)
         }
@@ -83,8 +83,8 @@ fn print_wave(core: &mut Core, width: &usize, height: &usize, view: View, screen
 }
 
 
-fn print_pixels_to_stdout(wave: Vec<Vec<char>>, screen: &mut Write, view: View) {
-    wave.iter().enumerate().for_each(|(i, line)| {
+fn print_pixels_to_stdout(wave: Vec<Vec<char>>, screen: &mut Write) {
+    wave.iter().for_each(|line| {
         for pixel in line {
             write!(screen, "{}", pixel).unwrap();
         }
