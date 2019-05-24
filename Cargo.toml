@@ -1,6 +1,6 @@
 [package]
 name = "wavr"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Richard Mitic <richard.h.mitic@gmail.com>"]
 publish = false
 
