@@ -55,6 +55,31 @@ fn interp_lookup(samples: Vec<WaveSamplesChannel>, start_frame: usize, indices: 
     new_samples
 }
 
+fn draw_outline(arr: &mut Vec<Vec<char>>) {
+    let height = arr.len();
+    let width = arr[0].len();
+    let j_max = height - 1;
+    let i_max = width - 1;
+
+    for i in 0..width {
+        arr[0][i] = '─'
+    };
+
+    for j in 1..height - 1 {
+        arr[j][0] = '│';
+        arr[j][i_max] = '│';
+    }
+
+    for i in 0..width {
+        arr[j_max][i] = '─'
+    };
+
+    arr[0][0] = '┌';
+    arr[0][i_max] = '┐';
+    arr[j_max][0] = '└';
+    arr[j_max][i_max] = '┘';
+}
+
 pub struct DisplayChars {
     rms: char,
     peak: char,
@@ -160,6 +185,8 @@ impl Core {
             }
         });
 
+        draw_outline(&mut arr);
+
         arr
     }
 
@@ -244,6 +271,8 @@ impl Core {
                 }
             }
         });
+
+        draw_outline(&mut arr);
 
         arr
     }

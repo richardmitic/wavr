@@ -101,7 +101,7 @@ fn print_pixels(wave: Vec<Vec<char>>, screen: &mut Write, view: View) {
             write!(screen, "{}", pixel).unwrap();
         }
     });
-    write!(screen, "{}{} {:.6}:{:.6}", termion::style::Reset, termion::cursor::Goto(1,1), view.0, view.1).unwrap();
+    write!(screen, "{}{}{:.6}:{:.6}", termion::style::Reset, termion::cursor::Goto(2,1), view.0, view.1).unwrap();
     screen.flush().unwrap();
 }
 
