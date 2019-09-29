@@ -1,11 +1,17 @@
 extern crate hound;
 extern crate itertools;
+extern crate rustfft;
 
 use self::hound::WavReader;
+use self::rustfft::num_complex::Complex;
+use self::rustfft::num_traits::Zero;
+use self::rustfft::FFTplanner;
 use pcm::read_i16_section;
 use std::ops::{Add, Mul, Sub};
 use std::vec::Vec;
 use util::FileType;
+
+type SpectralFrame = Vec<f32>;
 
 #[derive(Debug, Clone, Copy)]
 pub struct WaveSection {
@@ -72,11 +78,29 @@ impl Mul<f32> for WaveSection {
     }
 }
 
+fn complex_from_signal_multichannel(signal: &[i16], channels: u16) -> Vec<Vec<Complex<f32>>> {
+    (0..channels as usize)
+        .map(|n| {
+            signal
+                .iter()
+                .cloned()
+                .skip(n)
+                .step_by(channels as usize)
+                .map(|sample| Complex::<f32> {
+                    re: sample as f32,
+                    im: 0f32,
+                })
+                .collect::<Vec<Complex<f32>>>()
+        })
+        .collect::<Vec<Vec<Complex<f32>>>>()
+}
+
 pub struct WaveForm {
     pub summary_256: Vec<Vec<WaveSection>>,
     pub summary_1k: Vec<Vec<WaveSection>>,
     pub summary_8k: Vec<Vec<WaveSection>>,
     pub summary_256k: Vec<Vec<WaveSection>>,
+    pub spectrum: Vec<Vec<SpectralFrame>>,
     pub min: i16,
     pub max: i16,
     pub channels: u16,
@@ -114,12 +138,37 @@ impl WaveForm {
         summary
     }
 
+    pub fn make_spectrum(
+        samples: &Vec<i16>,
+        fft_size: usize,
+        channels: u16,
+    ) -> Vec<Vec<SpectralFrame>> {
+        let mut spectrum = vec![vec![]; channels as usize];
+        let mut planner = FFTplanner::new(false);
+        let fft = planner.plan_fft(fft_size);
+        let mut output: Vec<Complex<f32>> = vec![Complex::zero(); fft_size];
+        for chunk in samples.chunks(fft_size * channels as usize) {
+            let mut input = complex_from_signal_multichannel(chunk, channels);
+            if input[0].len() != fft_size {
+                // Ignore incomplete frames
+                continue;
+            }
+            for i in 0..channels as usize {
+                fft.process(&mut input[i], &mut output);
+                let frame_abs = output.iter().map(Complex::norm).collect::<SpectralFrame>();
+                spectrum[i].push(frame_abs);
+            }
+        }
+        spectrum
+    }
+
     pub fn from_samples(samples: &Vec<i16>, channels: u16) -> WaveForm {
         WaveForm {
             summary_256: WaveForm::make_summary(samples, 64, channels),
             summary_1k: WaveForm::make_summary(samples, 1024, channels),
             summary_8k: WaveForm::make_summary(samples, 8196, channels),
             summary_256k: WaveForm::make_summary(samples, 65536, channels),
+            spectrum: WaveForm::make_spectrum(samples, 512, channels),
             min: samples.iter().cloned().min().unwrap(),
             max: samples.iter().cloned().max().unwrap(),
             channels: channels,
@@ -200,6 +249,9 @@ mod tests {
         assert_eq!(w.summary_8k[0].len(), 13);
         assert_eq!(w.summary_256k.len(), 1);
         assert_eq!(w.summary_256k[0].len(), 2);
+        assert_eq!(w.spectrum.len(), 1);
+        assert_eq!(w.spectrum[0].len(), 206);
+        assert_eq!(w.spectrum[0][0].len(), 512);
         assert_eq!(w.channels, 1);
     }
 
@@ -231,5 +283,4 @@ mod tests {
         assert_eq!(ws[0].rms, 2.6457512);
         assert_eq!(ws[1].rms, 3.2403703);
     }
-
 }
