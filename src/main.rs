@@ -69,7 +69,7 @@ fn print_wave(
     width: &usize,
     height: &usize,
     view: View,
-    screen: &mut Write,
+    screen: &mut dyn Write,
     stdout: bool,
 ) {
     if core.should_draw_samples(&(view.0 as f64), &(view.1 as f64), width) {
@@ -92,7 +92,7 @@ fn print_wave(
     }
 }
 
-fn print_pixels_to_stdout(wave: Vec<Vec<char>>, screen: &mut Write) {
+fn print_pixels_to_stdout(wave: Vec<Vec<char>>, screen: &mut dyn Write) {
     wave.iter().for_each(|line| {
         for pixel in line {
             write!(screen, "{}", pixel).unwrap();
@@ -102,7 +102,7 @@ fn print_pixels_to_stdout(wave: Vec<Vec<char>>, screen: &mut Write) {
     screen.flush().unwrap();
 }
 
-fn print_pixels(wave: Vec<Vec<char>>, screen: &mut Write, view: View) {
+fn print_pixels(wave: Vec<Vec<char>>, screen: &mut dyn Write, view: View) {
     write!(
         screen,
         "{}{}",
@@ -128,12 +128,12 @@ fn print_pixels(wave: Vec<Vec<char>>, screen: &mut Write, view: View) {
     screen.flush().unwrap();
 }
 
-fn setup_screen(screen: &mut Write) {
+fn setup_screen(screen: &mut dyn Write) {
     write!(screen, "{}{}", termion::clear::All, termion::cursor::Hide).unwrap();
     screen.flush().unwrap()
 }
 
-fn reset_screen(screen: &mut Write) {
+fn reset_screen(screen: &mut dyn Write) {
     write!(
         screen,
         "{}{}{}",
