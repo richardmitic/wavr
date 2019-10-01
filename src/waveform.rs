@@ -11,7 +11,7 @@ use std::ops::{Add, Mul, Sub};
 use std::vec::Vec;
 use util::FileType;
 
-type SpectralFrame = Vec<f32>;
+pub type SpectralFrame = Vec<f32>;
 
 #[derive(Debug, Clone, Copy)]
 pub struct WaveSection {
@@ -147,14 +147,20 @@ impl WaveForm {
         let mut planner = FFTplanner::new(false);
         let fft = planner.plan_fft(fft_size);
         let mut output: Vec<Complex<f32>> = vec![Complex::zero(); fft_size];
+        let window = apodize::hanning_iter(fft_size).collect::<Vec<f64>>();
         for chunk in samples.chunks(fft_size * channels as usize) {
-            let mut input = complex_from_signal_multichannel(chunk, channels);
+            let input = complex_from_signal_multichannel(chunk, channels);
             if input[0].len() != fft_size {
                 // Ignore incomplete frames
                 continue;
             }
             for i in 0..channels as usize {
-                fft.process(&mut input[i], &mut output);
+                let mut windowed_input = input[i]
+                    .iter()
+                    .zip(window.iter())
+                    .map(|(x, w)| x.scale(*w as f32))
+                    .collect::<Vec<Complex<f32>>>();
+                fft.process(&mut windowed_input, &mut output);
                 let frame_abs = output.iter().map(Complex::norm).collect::<SpectralFrame>();
                 spectrum[i].push(frame_abs);
             }
@@ -168,7 +174,7 @@ impl WaveForm {
             summary_1k: WaveForm::make_summary(samples, 1024, channels),
             summary_8k: WaveForm::make_summary(samples, 8196, channels),
             summary_256k: WaveForm::make_summary(samples, 65536, channels),
-            spectrum: WaveForm::make_spectrum(samples, 512, channels),
+            spectrum: WaveForm::make_spectrum(samples, 256, channels),
             min: samples.iter().cloned().min().unwrap(),
             max: samples.iter().cloned().max().unwrap(),
             channels: channels,

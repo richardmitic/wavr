@@ -8,7 +8,7 @@ use pcm::{get_duration, read_wavesection, WaveSamplesChannel};
 use std;
 use std::string::String;
 use util::{get_type, FileType};
-use waveform::{WaveForm, WaveSection};
+use waveform::{SpectralFrame, WaveForm, WaveSection};
 
 type WavePeaksChannel = Vec<Option<WaveSection>>;
 
@@ -142,6 +142,71 @@ impl Core {
         self.summary.as_ref().unwrap().channels as usize
     }
 
+    pub fn get_spect(
+        &mut self,
+        start: &f64,
+        end: &f64,
+        num_peaks: u32,
+    ) -> Vec<Vec<Option<SpectralFrame>>> {
+        let spect = &self.summary.as_ref().unwrap().spectrum;
+        let max_points = spect[0].len() - 1;
+        let skip = (*end - *start) / (num_peaks as f64);
+        spect
+            .iter()
+            .map(|spect_channel| {
+                (0..num_peaks)
+                    .map(|x| {
+                        let phase = *start + (x as f64 * skip);
+                        match phase {
+                            p if p < 0f64 => None,
+                            p if p >= 1f64 => None,
+                            _ => {
+                                let interp_index = phase * max_points as f64;
+                                let int_index = interp_index as usize;
+                                Some(spect_channel[int_index].clone())
+                            }
+                        }
+                    })
+                    .collect::<Vec<Option<SpectralFrame>>>()
+            })
+            .collect::<Vec<Vec<Option<SpectralFrame>>>>()
+    }
+
+    pub fn draw_spect(
+        &mut self,
+        spect: Vec<Option<SpectralFrame>>,
+        width: &usize,
+        height: &usize,
+    ) -> Vec<Vec<char>> {
+        let mut arr = vec![vec![' '; *width]; *height];
+        let coeff = 1000f32;
+        let base = 2f32;
+        for (i, frame) in spect.iter().enumerate() {
+            let f = frame.as_ref().unwrap();
+            let max_bin = f.len() - 1;
+            let mid_bin = max_bin / 2;
+            let bin_indices = (0..*height).map(|x| x as f64).collect();
+            let bins = scale_vec(
+                bin_indices,
+                0.,
+                *height as f64,
+                mid_bin as f64,
+                max_bin as f64,
+            );
+            for (j, idx) in bins.iter().enumerate() {
+                let val = f[*idx as usize];
+                arr[j][i] = match val {
+                    v if v > base.powf(4.) * coeff => '▆',
+                    v if v > base.powf(3.) * coeff => '▓',
+                    v if v > base.powf(2.) * coeff => '▒',
+                    v if v > base.powf(1.) * coeff => '░',
+                    _ => ' ',
+                }
+            }
+        }
+        arr
+    }
+
     pub fn get_peaks(&mut self, start: &f64, end: &f64, num_peaks: u32) -> Vec<WavePeaksChannel> {
         let best_summary = self
             .summary
@@ -265,6 +330,21 @@ impl Core {
             .into_iter()
             .zip(heights.into_iter())
             .map(|(chan, h)| self.draw_peaks(chan, width, &h))
+            .flatten()
+            .collect()
+    }
+
+    pub fn draw_spect_multichannel(
+        &mut self,
+        spects: Vec<Vec<Option<SpectralFrame>>>,
+        width: &usize,
+        height: &usize,
+    ) -> Vec<Vec<char>> {
+        let heights = self.channel_heights(height);
+        spects
+            .into_iter()
+            .zip(heights.into_iter())
+            .map(|(chan, h)| self.draw_spect(chan, width, &h))
             .flatten()
             .collect()
     }
@@ -714,6 +794,35 @@ mod tests {
         let mut c = Core::new();
         c.load("./resources/stereo.wav".to_string(), None);
         assert_eq!(c.should_draw_samples(&0., &1., &20), false);
+    }
+
+    #[test]
+    fn gets_spectrum() {
+        let mut c = Core::new();
+        c.load("./resources/duskwolf.wav".to_string(), None);
+        let s = c.get_spect(&0., &1., 20);
+        assert_eq!(s.len(), 1);
+        assert_eq!(s[0].len(), 20);
+    }
+
+    #[test]
+    fn draws_spectrum() {
+        let mut c = Core::new();
+        c.load("./resources/duskwolf.wav".to_string(), None);
+        let p = c.get_spect(&0., &1., 120);
+        let w = c.draw_spect(p[0].clone(), &120, &40);
+        w.iter()
+            .for_each(|row: &Vec<char>| println!("{:?}", row.iter().collect::<String>()));
+    }
+
+    #[test]
+    fn draws_spectrum_stereo() {
+        let mut c = Core::new();
+        c.load("./resources/oktava.wav".to_string(), None);
+        let p = c.get_spect(&0., &1., 120);
+        let w = c.draw_spect_multichannel(p, &120, &40);
+        w.iter()
+            .for_each(|row: &Vec<char>| println!("{:?}", row.iter().collect::<String>()));
     }
 
     #[ignore]
