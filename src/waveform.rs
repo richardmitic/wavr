@@ -256,8 +256,8 @@ mod tests {
         assert_eq!(w.summary_256k.len(), 1);
         assert_eq!(w.summary_256k[0].len(), 2);
         assert_eq!(w.spectrum.len(), 1);
-        assert_eq!(w.spectrum[0].len(), 206);
-        assert_eq!(w.spectrum[0][0].len(), 512);
+        assert_eq!(w.spectrum[0].len(), 412);
+        assert_eq!(w.spectrum[0][0].len(), 256);
         assert_eq!(w.channels, 1);
     }
 

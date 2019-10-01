@@ -146,7 +146,7 @@ impl Core {
         &mut self,
         start: &f64,
         end: &f64,
-        num_peaks: u32,
+        num_peaks: usize,
     ) -> Vec<Vec<Option<SpectralFrame>>> {
         let spect = &self.summary.as_ref().unwrap().spectrum;
         let max_points = spect[0].len() - 1;
@@ -182,26 +182,30 @@ impl Core {
         let coeff = 1000f32;
         let base = 2f32;
         for (i, frame) in spect.iter().enumerate() {
-            let f = frame.as_ref().unwrap();
-            let max_bin = f.len() - 1;
-            let mid_bin = max_bin / 2;
-            let bin_indices = (0..*height).map(|x| x as f64).collect();
-            let bins = scale_vec(
-                bin_indices,
-                0.,
-                *height as f64,
-                mid_bin as f64,
-                max_bin as f64,
-            );
-            for (j, idx) in bins.iter().enumerate() {
-                let val = f[*idx as usize];
-                arr[j][i] = match val {
-                    v if v > base.powf(4.) * coeff => '▆',
-                    v if v > base.powf(3.) * coeff => '▓',
-                    v if v > base.powf(2.) * coeff => '▒',
-                    v if v > base.powf(1.) * coeff => '░',
-                    _ => ' ',
-                }
+            match frame {
+                Some(f) => {
+                    let max_bin = f.len() - 1;
+                    let mid_bin = max_bin / 2;
+                    let bin_indices = (0..*height).map(|x| x as f64).collect();
+                    let bins = scale_vec(
+                        bin_indices,
+                        0.,
+                        *height as f64,
+                        mid_bin as f64,
+                        max_bin as f64,
+                    );
+                    for (j, idx) in bins.iter().enumerate() {
+                        let val = f[*idx as usize];
+                        arr[j][i] = match val {
+                            v if v > base.powf(4.) * coeff => '▆',
+                            v if v > base.powf(3.) * coeff => '▓',
+                            v if v > base.powf(2.) * coeff => '▒',
+                            v if v > base.powf(1.) * coeff => '░',
+                            _ => ' ',
+                        }
+                    }
+                },
+                None => (),
             }
         }
         arr

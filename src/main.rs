@@ -71,8 +71,17 @@ fn print_wave(
     view: View,
     screen: &mut dyn Write,
     stdout: bool,
+    draw_spect: bool,
 ) {
-    if core.should_draw_samples(&(view.0 as f64), &(view.1 as f64), width) {
+    if draw_spect {
+        let spect = core.get_spect(&(view.0 as f64), &(view.1 as f64), *width as usize);
+        let bitmap = core.draw_spect_multichannel(spect, &width, &height);
+        if stdout {
+            print_pixels_to_stdout(bitmap, screen)
+        } else {
+            print_pixels(bitmap, screen, view)
+        }
+    } else if core.should_draw_samples(&(view.0 as f64), &(view.1 as f64), width) {
         let samples =
             core.get_samples_multichannel(&(view.0 as f64), &(view.1 as f64), *width as usize);
         let wave = core.draw_samples_multichannel(samples, &width, &height);
@@ -209,6 +218,12 @@ fn main() {
                 .takes_value(false)
                 .help("Print single view and exit"),
         )
+        .arg(
+            clap::Arg::with_name("spect")
+                .short("x")
+                .takes_value(false)
+                .help("Display spectrogram"),
+        )
         .get_matches();
 
     let size = terminal_size().unwrap();
@@ -222,6 +237,7 @@ fn main() {
         .parse()
         .unwrap_or(size.1) as usize;
     let just_print = matches.occurrences_of("print") > 0;
+    let draw_spect = matches.occurrences_of("spect") > 0;
 
     let mut view_point = ViewPoint {
         begin: matches.value_of("begin").unwrap().parse().unwrap(),
@@ -238,7 +254,15 @@ fn main() {
     let view = view_point.get_view();
 
     if just_print {
-        print_wave(&mut c, &width, &height, view, &mut stdout(), true);
+        print_wave(
+            &mut c,
+            &width,
+            &height,
+            view,
+            &mut stdout(),
+            true,
+            draw_spect,
+        );
         return;
     }
 
@@ -247,30 +271,30 @@ fn main() {
 
     setup_screen(&mut out);
 
-    print_wave(&mut c, &width, &height, view, &mut out, false);
+    print_wave(&mut c, &width, &height, view, &mut out, false, draw_spect);
 
     for key in stdin.keys() {
         match key.unwrap() {
             Key::Char('q') => break,
             Key::Char('r') => {
                 let view = view_point.reset();
-                print_wave(&mut c, &width, &height, view, &mut out, false);
+                print_wave(&mut c, &width, &height, view, &mut out, false, draw_spect);
             }
             Key::Left => {
                 let view = view_point.shift_left();
-                print_wave(&mut c, &width, &height, view, &mut out, false);
+                print_wave(&mut c, &width, &height, view, &mut out, false, draw_spect);
             }
             Key::Right => {
                 let view = view_point.shift_right();
-                print_wave(&mut c, &width, &height, view, &mut out, false);
+                print_wave(&mut c, &width, &height, view, &mut out, false, draw_spect);
             }
             Key::Up => {
                 let view = view_point.zoom_in();
-                print_wave(&mut c, &width, &height, view, &mut out, false);
+                print_wave(&mut c, &width, &height, view, &mut out, false, draw_spect);
             }
             Key::Down => {
                 let view = view_point.zoom_out();
-                print_wave(&mut c, &width, &height, view, &mut out, false);
+                print_wave(&mut c, &width, &height, view, &mut out, false, draw_spect);
             }
             _ => {}
         }
