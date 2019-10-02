@@ -14,6 +14,10 @@ use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 use termion::terminal_size;
 
+const APP_VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const APP_NAME: &'static str = env!("CARGO_PKG_NAME");
+
+
 /// A view into a wave. Beginning and end as numbers between 0. and 1.
 type View = (f64, f64);
 
@@ -156,8 +160,8 @@ fn reset_screen(screen: &mut dyn Write) {
 
 fn main() {
     // arguments
-    let matches = App::new("WavR")
-        .version("0.1")
+    let matches = App::new(APP_NAME)
+        .version(APP_VERSION)
         .about("view wav files in the terminal")
         .arg(
             clap::Arg::with_name("INPUT")
