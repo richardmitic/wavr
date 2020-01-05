@@ -9,6 +9,7 @@ use std;
 use std::string::String;
 use util::{get_type, FileType};
 use waveform::{SpectralFrame, WaveForm, WaveSection};
+use signals;
 
 type WavePeaksChannel = Vec<Option<WaveSection>>;
 
@@ -112,6 +113,8 @@ pub struct Core {
     filetype: FileType,
     summary: Option<WaveForm>,
     chars: DisplayChars,
+    use_signals: bool,
+    signals_audio_data: Option<signals::AudioMultiChannel>
 }
 
 impl Core {
@@ -129,13 +132,22 @@ impl Core {
                 sample_mid: '·',
                 sample_high: '˙',
             },
+            use_signals: false,
+            signals_audio_data: None
         }
+    }
+
+    pub fn use_signals_backend(&mut self, use_signals: bool) {
+        self.use_signals = use_signals;
     }
 
     pub fn load(&mut self, f: String, channels: Option<u16>) {
         self.file = f;
         self.filetype = get_type(&self.file);
         self.summary = Some(WaveForm::from_file(&self.file, &self.filetype, channels));
+        if self.use_signals {
+            self.signals_audio_data = Some(signals::load_file(self.file.clone()).unwrap());
+        }
     }
 
     pub fn channels(&mut self) -> usize {
@@ -359,8 +371,9 @@ impl Core {
         end: &f64,
         num_bins: usize,
     ) -> Vec<WaveSamplesChannel> {
-        match &self.filetype {
-            &FileType::WAV => self.get_samples_multichannel_wav(start, end, num_bins),
+        match (&self.filetype, &self.use_signals) {
+            (&FileType::WAV, &false) => self.get_samples_multichannel_wav(start, end, num_bins),
+            (&FileType::WAV, &true) => self.get_samples_multichannel_wav_signals(start, end, num_bins),
             _ => self.get_samples_multichannel_pcm(start, end, num_bins),
         }
     }
@@ -432,6 +445,22 @@ impl Core {
         interp_lookup(multichannel_samples, start_frame, interp_indices)
     }
 
+    pub fn get_samples_multichannel_wav_signals(
+        &mut self,
+        start: &f64,
+        end: &f64,
+        num_bins: usize,
+    ) -> Vec<WaveSamplesChannel> {
+        self.signals_audio_data
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|channel| {
+                signals::extract_waveform_checked(channel, *start, *end, num_bins)
+            })
+            .collect()
+    }
+
     pub fn draw_samples(
         &mut self,
         samples: WaveSamplesChannel,
@@ -439,8 +468,8 @@ impl Core {
         height: &usize,
     ) -> Vec<Vec<char>> {
         let mut arr = vec![vec![' '; *width]; *height];
-        let full_scale_max = (std::i16::MAX) as f64;
-        let full_scale_min = (std::i16::MIN) as f64;
+        let full_scale_max = if self.use_signals {  1. } else { (std::i16::MAX) as f64 };
+        let full_scale_min = if self.use_signals { -1. } else { (std::i16::MIN) as f64 };
         let this_scale_max = (*height - 1) as f64;
         samples
             .into_iter()

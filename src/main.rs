@@ -1,3 +1,4 @@
+#![feature(test)]
 extern crate clap;
 extern crate termion;
 
@@ -5,6 +6,7 @@ mod core;
 mod pcm;
 mod util;
 mod waveform;
+mod signals;
 
 use clap::App;
 use core::Core;
@@ -228,6 +230,12 @@ fn main() {
                 .takes_value(false)
                 .help("Display spectrogram"),
         )
+        .arg(
+            clap::Arg::with_name("signals")
+                .short("S")
+                .takes_value(false)
+                .help("Use experimental \"signals\" backend"),
+        )
         .get_matches();
 
     let size = terminal_size().unwrap();
@@ -242,6 +250,7 @@ fn main() {
         .unwrap_or(size.1) as usize;
     let just_print = matches.occurrences_of("print") > 0;
     let draw_spect = matches.occurrences_of("spect") > 0;
+    let use_signals = matches.occurrences_of("signals") > 0;
 
     let mut view_point = ViewPoint {
         begin: matches.value_of("begin").unwrap().parse().unwrap(),
@@ -253,6 +262,7 @@ fn main() {
     println!("{:?}", filepath);
 
     let mut c = Core::new();
+    c.use_signals_backend(use_signals);
     c.load(filepath.unwrap().to_string(), Some(channels));
 
     let view = view_point.get_view();
