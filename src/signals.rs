@@ -214,6 +214,21 @@ pub fn extract_envelope_checked(
         .collect()
 }
 
+pub fn extract_rms_checked(
+    samples: &AudioChannel,
+    start: f64,
+    end: f64,
+    nbins: usize,
+) -> CheckedEnvelope {
+    let (bins_before, bins_centre, bins_after) = calculate_bin_sections(&start, &end, &nbins);
+    let signal = extract_rms(samples, start.max(0.), end.min(1.), bins_centre);
+    iter::repeat(None)
+        .take(bins_before)
+        .chain(signal.into_iter().map(|x| Some(x)))
+        .chain(iter::repeat(None).take(bins_after))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use self::all_asserts::{assert_gt,assert_lt};
@@ -262,7 +277,7 @@ mod tests {
         for i in (20..200).step_by(10) {
             let wf = extract_waveform(&samples[0], 0.1, 0.21, i);
             assert_eq!(wf.len(), i);
-            write_envelope_to_file(&wf, format!("wf{:03}.txt", i));
+            //write_envelope_to_file(&wf, format!("wf{:03}.txt", i));
         }
     }
 
@@ -274,7 +289,7 @@ mod tests {
         for i in (20..200).step_by(10) {
             let wf = extract_waveform(&samples[0], 0.1, 0.11, i);
             assert_eq!(wf.len(), i);
-            write_envelope_to_file(&wf, format!("wfz{:03}.txt", i));
+            //write_envelope_to_file(&wf, format!("wfz{:03}.txt", i));
         }
     }
 
@@ -289,7 +304,7 @@ mod tests {
             let end = 0.11 + i as f64 / 100.;
             let wf = extract_waveform(&samples[0], start, end, 100);
             assert_eq!(wf.len(), 100);
-            write_envelope_to_file(&wf, format!("ewmbfs{:03}.txt", i));
+            //write_envelope_to_file(&wf, format!("ewmbfs{:03}.txt", i));
         }
     }
 
@@ -312,7 +327,7 @@ mod tests {
     fn no_transient_artifacts() {
         let samples = load_file("./resources/sine.c1.r8000.f32.wav".to_string()).unwrap();
         let env = extract_envelope(&samples[0], 0.1, 0.9, 20);
-        write_envelope_to_file(&env, "no_transient_artifacts.txt".to_string());
+        //write_envelope_to_file(&env, "no_transient_artifacts.txt".to_string());
         env.into_iter().for_each(|s| {
             assert_gt!(s, 0.48);
             assert_lt!(s, 0.52);
@@ -375,6 +390,32 @@ mod tests {
     fn checked_envelope_after_end() {
         let samples = load_file("./resources/sine.c1.r8000.f32.wav".to_string()).unwrap();
         let env = extract_envelope_checked(&samples[0], 0.99, 1.01, 10);
+        assert_eq!(env.len(), 10);
+        env[0..5].iter().for_each(|x| assert!(x.is_some()));
+        env[5..].iter().for_each(|x| assert!(x.is_none()));
+    }
+
+    #[test]
+    fn checked_rms_middle() {
+        let samples = load_file("./resources/sine.c1.r8000.f32.wav".to_string()).unwrap();
+        let env = extract_rms_checked(&samples[0], 0.1, 0.2, 10);
+        assert_eq!(env.len(), 10);
+        env.iter().for_each(|x| assert!(x.is_some()));
+    }
+
+    #[test]
+    fn checked_rms_before_start() {
+        let samples = load_file("./resources/sine.c1.r8000.f32.wav".to_string()).unwrap();
+        let env = extract_rms_checked(&samples[0], -0.01, 0.01, 10);
+        assert_eq!(env.len(), 10);
+        env[0..5].iter().for_each(|x| assert!(x.is_none()));
+        env[5..].iter().for_each(|x| assert!(x.is_some()));
+    }
+
+    #[test]
+    fn checked_rms_after_end() {
+        let samples = load_file("./resources/sine.c1.r8000.f32.wav".to_string()).unwrap();
+        let env = extract_rms_checked(&samples[0], 0.99, 1.01, 10);
         assert_eq!(env.len(), 10);
         env[0..5].iter().for_each(|x| assert!(x.is_some()));
         env[5..].iter().for_each(|x| assert!(x.is_none()));

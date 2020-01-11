@@ -224,6 +224,33 @@ impl Core {
     }
 
     pub fn get_peaks(&mut self, start: &f64, end: &f64, num_peaks: u32) -> Vec<WavePeaksChannel> {
+        if self.use_signals {
+            self.get_peaks_signals(start, end, num_peaks)
+        } else {
+            self.get_peaks_summaries(start, end, num_peaks)
+        }
+    }
+
+    pub fn get_peaks_signals(&mut self, start: &f64, end: &f64, num_peaks: u32) -> Vec<WavePeaksChannel> {
+        self.signals_audio_data
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|channel| {
+                let env = signals::extract_envelope_checked(channel, *start, *end, num_peaks as usize);
+                let rms = signals::extract_rms_checked(channel, *start, *end, num_peaks as usize);
+                env.iter().zip(rms)
+                    .map(|(maybe_peak, maybe_rms)| {
+                        maybe_peak.map(|p| {
+                            WaveSection { min:-p, max:p, rms:maybe_rms.unwrap()}
+                        })
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    pub fn get_peaks_summaries(&mut self, start: &f64, end: &f64, num_peaks: u32) -> Vec<WavePeaksChannel> {
         let best_summary = self
             .summary
             .as_ref()
@@ -265,8 +292,8 @@ impl Core {
     ) -> Vec<Vec<char>> {
         let mut arr = vec![vec![' '; *width]; *height];
         peaks.iter().enumerate().for_each(|(i, sect)| {
-            let full_scale_max = (std::i16::MAX) as f64;
-            let full_scale_min = (std::i16::MIN) as f64;
+            let full_scale_max = if self.use_signals {  1. } else { (std::i16::MAX) as f64 };
+            let full_scale_min = if self.use_signals { -1. } else { (std::i16::MIN) as f64 };
             let this_scale_max = (*height - 1) as f64;
             let centre_row = scale(0., full_scale_min, full_scale_max, this_scale_max, 0.) as usize
                 + (*height % 2);

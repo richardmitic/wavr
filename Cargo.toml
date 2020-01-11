@@ -9,7 +9,7 @@ name = "wavr"
 path = "src/main.rs"
 
 [dependencies]
-termion = "1.5.1"
+termion = "1.5.4"
 hound = "3.3.1"
 clap = "2.31.2"
 itertools = "0.8.2"

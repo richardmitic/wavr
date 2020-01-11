@@ -10,7 +10,7 @@ mod signals;
 
 use clap::App;
 use core::Core;
-use std::io::{stdin, stdout, Write};
+use std::io::{stdin, stdout, Write, BufWriter};
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
@@ -281,7 +281,7 @@ fn main() {
     }
 
     let stdin = stdin();
-    let mut out = stdout().into_raw_mode().unwrap();
+    let mut out = BufWriter::with_capacity(16 * 1024, stdout().into_raw_mode().unwrap()); // capacity should be easily bigger than one screen
 
     setup_screen(&mut out);
 
