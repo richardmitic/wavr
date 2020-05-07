@@ -185,7 +185,7 @@ impl WaveForm {
     pub fn from_file(path: &str, ft: &FileType, channels: Option<u16>) -> WaveForm {
         match ft {
             &FileType::WAV => WaveForm::from_wav_file(path),
-            &FileType::PCM => WaveForm::from_pcm_file(path, channels.unwrap_or(1)),
+            _ => WaveForm::from_pcm_file(path, channels.unwrap_or(1)),
         }
     }
 

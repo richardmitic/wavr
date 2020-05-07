@@ -6,7 +6,7 @@ extern crate num;
 extern crate all_asserts;
 extern crate test;
 
-use self::audrey::read::ReadError;
+use self::audrey::{read::ReadError, Format};
 use self::sample::{envelope, interpolate, ring_buffer, signal, Signal};
 use self::num::clamp;
 use std::iter;
@@ -22,7 +22,15 @@ type CheckedEnvelope = Vec<Option<f32>>;
 pub fn load_file<P: AsRef<Path>>(path: P) -> Result<AudioMultiChannel, ReadError> {
     let mut reader = audrey::read::open(path)?;
     let num_channels = reader.description().channel_count() as usize;
+    let fmt = reader.description().format();
     let samples = reader.samples::<f32>();
+
+    // audrey has a bug in the flac decoder...
+    // let's just assume it's 16-bit
+    let scale: f32 = match fmt {
+        Format::Flac => 65535.,
+        _ => 1.
+    };
 
     let mut channels: AudioMultiChannel = vec![Vec::with_capacity(samples.size_hint().0); num_channels];
     for (i, sample) in samples
@@ -31,7 +39,7 @@ pub fn load_file<P: AsRef<Path>>(path: P) -> Result<AudioMultiChannel, ReadError
         .enumerate()
     {
         let channel = i % num_channels;
-        channels[channel].push(sample);
+        channels[channel].push(sample * scale);
     }
     Ok(channels)
 }
@@ -410,6 +418,14 @@ mod tests {
         let samples = load_file("./resources/sine.c1.r8000.f32.wav".to_string()).unwrap();
         let env = extract_waveform_checked(&samples[0], 0.1, 0.2, 10);
         assert_eq!(env.len(), 10);
+        env.iter().for_each(|x| assert!(x.is_some()));
+    }
+
+    #[test]
+    fn flac() {
+        let samples = load_file("./resources/vocal.flac".to_string()).unwrap();
+        let env = extract_waveform_checked(&samples[0], 0., 1., 100);
+        assert_eq!(env.len(), 100);
         env.iter().for_each(|x| assert!(x.is_some()));
     }
 

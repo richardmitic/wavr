@@ -401,6 +401,7 @@ impl Core {
         match (&self.filetype, &self.use_signals) {
             (&FileType::WAV, &false) => self.get_samples_multichannel_wav(start, end, num_bins),
             (&FileType::WAV, &true) => self.get_samples_multichannel_wav_signals(start, end, num_bins),
+            (&FileType::FLAC, &true) => self.get_samples_multichannel_wav_signals(start, end, num_bins),
             _ => self.get_samples_multichannel_pcm(start, end, num_bins),
         }
     }
