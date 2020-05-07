@@ -1,14 +1,16 @@
-extern crate hound;
 extern crate sample;
+extern crate audrey;
+extern crate num;
 
 #[cfg(test)]
 extern crate all_asserts;
 extern crate test;
 
-use self::hound::{SampleFormat, WavReader, WavSpec};
-use self::sample::types::i24::I24;
-use self::sample::{conv, envelope, interpolate, ring_buffer, signal, Signal};
+use self::audrey::read::ReadError;
+use self::sample::{envelope, interpolate, ring_buffer, signal, Signal};
+use self::num::clamp;
 use std::iter;
+use std::path::Path;
 
 type AudioChannel = Vec<f32>;
 pub type AudioMultiChannel = Vec<AudioChannel>;
@@ -16,54 +18,22 @@ type ChannelEnvelope = Vec<f32>;
 type CheckedAudioChannel = Vec<Option<f32>>;
 type CheckedEnvelope = Vec<Option<f32>>;
 
-fn deinterleave(all_samples: AudioChannel, channels: usize) -> AudioMultiChannel {
-    assert!(all_samples.len() % channels == 0);
-    (0..channels)
-        .map(|channel| {
-            all_samples
-                .iter()
-                .skip(channel)
-                .step_by(channels)
-                .map(|s| *s)
-                .collect::<AudioChannel>()
-        })
-        .collect::<AudioMultiChannel>()
-}
 
-pub fn load_file(path: String) -> hound::Result<AudioMultiChannel> {
-    let reader = WavReader::open(path)?;
-    let spec = reader.spec();
-    //println!("{:?}", spec);
+pub fn load_file<P: AsRef<Path>>(path: P) -> Result<AudioMultiChannel, ReadError> {
+    let mut reader = audrey::read::open(path)?;
+    let num_channels = reader.description().channel_count() as usize;
+    let samples = reader.samples::<f32>();
 
-    let all_samples: AudioChannel = match spec {
-        WavSpec {
-            sample_format: SampleFormat::Int,
-            bits_per_sample: 16,
-            ..
-        } => Ok(reader
-            .into_samples::<i16>()
-            .map(|s| conv::i16::to_f32(s.unwrap()))
-            .collect::<AudioChannel>()),
-        WavSpec {
-            sample_format: SampleFormat::Int,
-            bits_per_sample: 24,
-            ..
-        } => Ok(reader
-            .into_samples::<i32>()
-            .map(|s| conv::i24::to_f32(I24::new_unchecked(s.unwrap())))
-            .collect::<AudioChannel>()),
-        WavSpec {
-            sample_format: SampleFormat::Float,
-            bits_per_sample: 32,
-            ..
-        } => Ok(reader
-            .into_samples::<f32>()
-            .map(|s| s.unwrap())
-            .collect::<AudioChannel>()),
-        _ => Err(hound::Error::Unsupported),
-    }?;
-
-    Ok(deinterleave(all_samples, spec.channels as usize))
+    let mut channels: AudioMultiChannel = vec![Vec::with_capacity(samples.size_hint().0); num_channels];
+    for (i, sample) in samples
+        .into_iter()
+        .filter_map(Result::ok)
+        .enumerate()
+    {
+        let channel = i % num_channels;
+        channels[channel].push(sample);
+    }
+    Ok(channels)
 }
 
 pub fn extract_envelope(
@@ -138,8 +108,15 @@ pub fn extract_waveform(
     nbins: usize,
 ) -> AudioChannel {
     let start_frame = (samples.len() as f64 * start) as usize;
-    let slice_length = (samples.len() as f64 * (end - start)) as usize;
+    let slice_length_fract = samples.len() as f64 * (end - start);
+    let slice_length = (slice_length_fract) as usize;
     let bin_length = slice_length / nbins;
+
+    // Special case: we're trying to interpolate a single sample to the entire screen.
+    // Just repeat the first sample instead of trying to be clever.
+    if slice_length == 0 {
+        return vec![samples[start_frame]; nbins];
+    }
 
     // Add pre-roll and and post-roll to avoid transient artifacts. Pre-roll will be removed at the
     // altered sample rate below
@@ -159,7 +136,7 @@ pub fn extract_waveform(
             .map(|s| [*s]),
     );
     let interpolator = interpolate::Linear::from_source(&mut sig);
-    let converter = sig.from_hz_to_hz(interpolator, slice_length as f64, nbins as f64);
+    let converter = sig.from_hz_to_hz(interpolator, slice_length_fract, nbins as f64);
     let preroll_frames_at_new_sample_rate = ((start_frame - prerolled_start_frame) as f32
         * (nbins as f32 / slice_length as f32))
         as usize;
@@ -176,7 +153,7 @@ pub fn extract_waveform(
 }
 
 fn calculate_bin_sections(start: &f64, end: &f64, nbins: &usize) -> (usize, usize, usize) {
-    let before_start = start.min(0.) * -1.;
+    let before_start = end.min(0.) - start.min(0.);
     let after_end = (end - 1.).max(0.);
     let bins_before_start = (*nbins as f64 * (before_start / (end - start))) as usize;
     let bins_after_end = (*nbins as f64 * (after_end / (end - start))) as usize;
@@ -191,7 +168,10 @@ pub fn extract_waveform_checked(
     nbins: usize,
 ) -> CheckedAudioChannel {
     let (bins_before, bins_centre, bins_after) = calculate_bin_sections(&start, &end, &nbins);
-    let signal = extract_waveform(samples, start.max(0.), end.min(1.), bins_centre);
+    let signal = match bins_centre {
+        0 => vec![],
+        _ => extract_waveform(samples, clamp(start, 0., 1.), clamp(end, 0., 1.), bins_centre)
+    };
     iter::repeat(None)
         .take(bins_before)
         .chain(signal.into_iter().map(|x| Some(x)))
@@ -206,7 +186,10 @@ pub fn extract_envelope_checked(
     nbins: usize,
 ) -> CheckedEnvelope {
     let (bins_before, bins_centre, bins_after) = calculate_bin_sections(&start, &end, &nbins);
-    let signal = extract_envelope(samples, start.max(0.), end.min(1.), bins_centre);
+    let signal = match bins_centre {
+        0 => vec![],
+        _ => extract_envelope(samples, clamp(start, 0., 1.), clamp(end, 0., 1.), bins_centre)
+    };
     iter::repeat(None)
         .take(bins_before)
         .chain(signal.into_iter().map(|x| Some(x)))
@@ -232,6 +215,7 @@ pub fn extract_rms_checked(
 #[cfg(test)]
 mod tests {
     use self::all_asserts::{assert_gt,assert_lt};
+    use self::sample::conv;
     use self::test::Bencher;
     use super::*;
     use std::fs;
@@ -427,6 +411,25 @@ mod tests {
         let env = extract_waveform_checked(&samples[0], 0.1, 0.2, 10);
         assert_eq!(env.len(), 10);
         env.iter().for_each(|x| assert!(x.is_some()));
+    }
+
+    #[test]
+    fn regression_1() {
+        // -0.9560426245757115 -0.07370410911355119
+        let samples = load_file("./resources/stereo.wav".to_string()).unwrap();
+        let env = extract_waveform_checked(&samples[0], -0.9560426245757115, -0.07370410911355119, 121);
+        assert_eq!(env.len(), 121);
+        env.iter().for_each(|x| assert!(x.is_none()));
+    }
+
+    #[test]
+    fn regression_2() {
+        // -0.21911338820010795 0.0012722828822266108 290 98
+        let samples = load_file("./resources/stereo.wav".to_string()).unwrap();
+        let env = extract_waveform_checked(&samples[0], -0.21911338820010795, 0.0012722828822266108, 290);
+        assert_eq!(env.len(), 290);
+        env[0..288].iter().for_each(|x| assert!(x.is_none()));
+        env[288..].iter().for_each(|x| assert!(x.is_some()));
     }
 
     #[bench]

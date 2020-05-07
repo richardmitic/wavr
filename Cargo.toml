@@ -11,6 +11,7 @@ path = "src/main.rs"
 [dependencies]
 termion = "1.5.4"
 hound = "3.3.1"
+audrey = { git = "https://github.com/RustAudio/audrey.git", branch = "master" }
 clap = "2.31.2"
 itertools = "0.8.2"
 rand = "0.3"
@@ -19,6 +20,7 @@ rustfft = "3.0.0"
 apodize = "1.0.0"
 sample = "0.10.0"
 time_calc = "0.13.0"
+num = "0.2.1"
 
 [dev-dependencies]
 all_asserts = "1.0.0"

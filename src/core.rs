@@ -908,6 +908,7 @@ mod tests {
             println!("{} {} {} {}", start, end, w, h);
 
             let mut c = Core::new();
+            // c.use_signals_backend(true);
             c.load("./resources/stereo.wav".to_string(), None);
             let a = c.get_samples_multichannel(&start, &end, w);
             let _b = c.draw_samples_multichannel(a, &w, &h);

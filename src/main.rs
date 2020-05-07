@@ -179,12 +179,14 @@ fn main() {
         .arg(
             clap::Arg::with_name("begin")
                 .short("b")
+                .long("begin")
                 .default_value("0.")
                 .help("Begining point within the wave"),
         )
         .arg(
             clap::Arg::with_name("end")
                 .short("e")
+                .long("end")
                 .default_value("1.")
                 .help("End point within the wave"),
         )
